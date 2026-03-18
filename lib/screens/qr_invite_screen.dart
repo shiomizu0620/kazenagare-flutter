@@ -127,7 +127,9 @@ class QrInviteScreen extends StatelessWidget {
                       Text(
                         '一.「道標を写し取る」で共有用リンクを控える\n\n二.QRを読み取ってもらい、庭へ招き入れる\n\n三.招待後は「自分の庭に戻る」で景色へ戻る',
                         style: TextStyle(
-                          color: const Color(0xFFF2E1C9).withValues(alpha: 0.95),
+                          color: const Color(
+                            0xFFF2E1C9,
+                          ).withValues(alpha: 0.95),
                           fontSize: 17,
                           height: 1.8,
                         ),
@@ -207,7 +209,9 @@ class QrInviteScreen extends StatelessWidget {
                       SelectableText(
                         '道しるべ: $inviteUrl',
                         style: TextStyle(
-                          color: const Color(0xFFF2E1C9).withValues(alpha: 0.95),
+                          color: const Color(
+                            0xFFF2E1C9,
+                          ).withValues(alpha: 0.95),
                           fontSize: 18,
                           height: 1.5,
                           decoration: TextDecoration.underline,
@@ -321,7 +325,10 @@ class _QrFrame extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.65), width: 2),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.65),
+          width: 2,
+        ),
       ),
       child: child,
     );

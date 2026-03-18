@@ -99,7 +99,8 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
 
     if (!mounted) return;
     setState(() {
-      if (saved.seasonId != null && _seasons.any((s) => s.id == saved.seasonId)) {
+      if (saved.seasonId != null &&
+          _seasons.any((s) => s.id == saved.seasonId)) {
         _selectedSeasonId = saved.seasonId!;
       }
       if (saved.name != null && saved.name!.isNotEmpty) {

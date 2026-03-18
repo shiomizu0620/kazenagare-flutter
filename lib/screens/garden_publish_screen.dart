@@ -170,7 +170,10 @@ class _GardenPublishScreenState extends State<GardenPublishScreen> {
             child: Align(
               alignment: Alignment.center,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFBAA57F).withValues(alpha: 0.85),
                   borderRadius: BorderRadius.circular(999),
@@ -189,12 +192,7 @@ class _GardenPublishScreenState extends State<GardenPublishScreen> {
           Positioned(
             left: 10,
             bottom: 10,
-            child: Wrap(
-              spacing: 8,
-              children: [
-                _smallTag(widget.gardenName),
-              ],
-            ),
+            child: Wrap(spacing: 8, children: [_smallTag(widget.gardenName)]),
           ),
         ],
       ),
@@ -309,10 +307,7 @@ class _GardenPublishScreenState extends State<GardenPublishScreen> {
           const SizedBox(height: 8),
           const Text(
             '※公開は回廊画面の管理からいつでも調整できます。',
-            style: TextStyle(
-              color: Color(0xFF6E6461),
-              fontSize: 13,
-            ),
+            style: TextStyle(color: Color(0xFF6E6461), fontSize: 13),
           ),
         ],
       ),
