@@ -374,6 +374,7 @@ class _GardenScreenState extends State<GardenScreen>
                 icon: Icons.menu_book_rounded,
                 tooltip: '図鑑を開く',
                 onPressed: () {
+                  _deactivateFloatingStick();
                   CatalogModal.show(context);
                 },
               ),
@@ -383,6 +384,7 @@ class _GardenScreenState extends State<GardenScreen>
                 icon: Icons.settings_rounded,
                 tooltip: 'オプション',
                 onPressed: () {
+                  _deactivateFloatingStick();
                   OptionsModal.show(context, isMe: true);
                 },
               ),
@@ -632,12 +634,33 @@ class _GardenScreenState extends State<GardenScreen>
 
   void _handleMobilePointerDown(PointerDownEvent event) {
     if (_activeStickPointer != null) return;
+    if (_isInActionButtonsZone(event.localPosition)) return;
 
     _activeStickPointer = event.pointer;
     setState(() {
       _floatingStickCenter = event.localPosition;
       _stickInput = Offset.zero;
     });
+  }
+
+  bool _isInActionButtonsZone(Offset position) {
+    if (_viewportSize == Size.zero) return false;
+
+    final topInset = MediaQuery.paddingOf(context).top;
+    const topMargin = 16.0;
+    const rightMargin = 16.0;
+    const buttonSize = kMinInteractiveDimension;
+    const spacing = 8.0;
+
+    final zoneRight = _viewportSize.width - rightMargin;
+    final zoneLeft = zoneRight - (buttonSize * 2 + spacing);
+    final zoneTop = topInset + topMargin;
+    final zoneBottom = zoneTop + buttonSize;
+
+    return position.dx >= zoneLeft &&
+        position.dx <= zoneRight &&
+        position.dy >= zoneTop &&
+        position.dy <= zoneBottom;
   }
 
   void _handleMobilePointerMove(PointerMoveEvent event) {
