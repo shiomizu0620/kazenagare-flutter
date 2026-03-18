@@ -1,5 +1,11 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../services/setup_local_storage.dart';
+import 'garden_list_screen.dart';
+import 'garden_publish_screen.dart';
+import 'qr_invite_screen.dart';
+import 'setup_screen.dart';
+import 'title_screen.dart';
 
 // ---------------------------------------------------
 // 1. オプションのアクションモデル（Next.jsのGardenOptionAction相当）
@@ -23,8 +29,9 @@ class OptionAction {
 // ---------------------------------------------------
 class OptionsModal extends StatelessWidget {
   final bool isMe; // 自分の庭かどうかでメニューを切り替えるフラグ
+  final GardenSetupLocalStorage _localStorage = GardenSetupLocalStorage();
 
-  const OptionsModal({super.key, this.isMe = true});
+  OptionsModal({super.key, this.isMe = true});
 
   // 外部からモーダルを呼び出すためのヘルパー
   static void show(BuildContext context, {bool isMe = true}) {
@@ -47,26 +54,55 @@ class OptionsModal extends StatelessWidget {
         label: '設定を変更する',
         description: '背景・季節・時間帯を選び直す',
         onTap: () {
-          debugPrint('設定変更');
-          Navigator.pop(context);
+          final navigator = Navigator.of(context);
+          navigator.pop();
+          navigator.push(
+            MaterialPageRoute(builder: (context) => const GardenSetupScreen()),
+          );
         },
       ),
       OptionAction(
         icon: Icons.qr_code_2_rounded,
         label: 'この庭のQRを表示する',
         description: 'スマホ共有用のQRコードを開く',
-        onTap: () {
-          debugPrint('QR表示');
-          Navigator.pop(context);
+        onTap: () async {
+          final saved = await _localStorage.load();
+          final hostName = (saved.name?.trim().isNotEmpty ?? false)
+              ? saved.name!.trim()
+              : 'あなた';
+
+          if (!context.mounted) return;
+          final navigator = Navigator.of(context);
+          navigator.pop();
+          navigator.push(
+            MaterialPageRoute(
+              builder: (context) => QrInviteScreen(hostName: hostName),
+            ),
+          );
         },
       ),
       OptionAction(
         icon: Icons.public_rounded,
         label: 'この庭を投稿する',
         description: '他の人があなたの庭を訪問できるようにする',
-        onTap: () {
-          debugPrint('投稿する');
-          Navigator.pop(context);
+        onTap: () async {
+          final saved = await _localStorage.load();
+          final gardenName = (saved.seasonId?.trim().isNotEmpty ?? false)
+              ? '庭-${_seasonLabel(saved.seasonId!)}'
+              : '庭-春';
+
+          if (!context.mounted) return;
+          final navigator = Navigator.of(context);
+          navigator.pop();
+          navigator.push(
+            MaterialPageRoute(
+              builder: (context) => GardenPublishScreen(
+                gardenName: gardenName,
+                seasonLabel: _seasonLabel(saved.seasonId ?? 'spring'),
+                timeLabel: '昼',
+              ),
+            ),
+          );
         },
       ),
       OptionAction(
@@ -74,8 +110,11 @@ class OptionsModal extends StatelessWidget {
         label: '庭一覧へ',
         description: '他の人の庭を見に行く',
         onTap: () {
-          debugPrint('庭一覧へ');
-          Navigator.pop(context);
+          final navigator = Navigator.of(context);
+          navigator.pop();
+          navigator.push(
+            MaterialPageRoute(builder: (context) => const GardenListScreen()),
+          );
         },
       ),
       OptionAction(
@@ -83,8 +122,12 @@ class OptionsModal extends StatelessWidget {
         label: 'トップへ戻る',
         description: '最初のページへ戻る',
         onTap: () {
-          debugPrint('トップへ');
-          Navigator.pop(context);
+          final navigator = Navigator.of(context);
+          navigator.pop();
+          navigator.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const TitleScreen()),
+            (route) => false,
+          );
         },
       ),
     ];
@@ -104,8 +147,11 @@ class OptionsModal extends StatelessWidget {
         label: '庭一覧へ',
         description: '他の人の庭を見に行く',
         onTap: () {
-          debugPrint('庭一覧へ');
-          Navigator.pop(context);
+          final navigator = Navigator.of(context);
+          navigator.pop();
+          navigator.push(
+            MaterialPageRoute(builder: (context) => const GardenListScreen()),
+          );
         },
       ),
       OptionAction(
@@ -113,8 +159,12 @@ class OptionsModal extends StatelessWidget {
         label: 'トップへ戻る',
         description: '最初のページへ戻る',
         onTap: () {
-          debugPrint('トップへ');
-          Navigator.pop(context);
+          final navigator = Navigator.of(context);
+          navigator.pop();
+          navigator.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const TitleScreen()),
+            (route) => false,
+          );
         },
       ),
     ];
@@ -262,5 +312,20 @@ class OptionsModal extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _seasonLabel(String seasonId) {
+    switch (seasonId) {
+      case 'spring':
+        return '春';
+      case 'summer':
+        return '夏';
+      case 'autumn':
+        return '秋';
+      case 'winter':
+        return '冬';
+      default:
+        return '春';
+    }
   }
 }

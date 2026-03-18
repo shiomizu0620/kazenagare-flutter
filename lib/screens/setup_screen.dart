@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../services/setup_local_storage.dart';
 import 'garden_screen.dart';
 
 // --- データモデル（変更なし） ---
@@ -71,6 +72,8 @@ class GardenSetupScreen extends StatefulWidget {
 }
 
 class _GardenSetupScreenState extends State<GardenSetupScreen> {
+  final GardenSetupLocalStorage _localStorage = GardenSetupLocalStorage();
+
   final _nameController = TextEditingController();
 
   // 👇 1. スクロール状態を管理するコントローラーを追加
@@ -84,6 +87,33 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
 
   SeasonUiMeta get _selectedSeason =>
       _seasons.firstWhere((s) => s.id == _selectedSeasonId);
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreFromLocalStorage();
+  }
+
+  Future<void> _restoreFromLocalStorage() async {
+    final saved = await _localStorage.load();
+
+    if (!mounted) return;
+    setState(() {
+      if (saved.seasonId != null && _seasons.any((s) => s.id == saved.seasonId)) {
+        _selectedSeasonId = saved.seasonId!;
+      }
+      if (saved.name != null && saved.name!.isNotEmpty) {
+        _nameController.text = saved.name!;
+      }
+    });
+  }
+
+  Future<void> _saveToLocalStorage({String? name, String? seasonId}) {
+    return _localStorage.save(
+      name: name ?? _nameController.text,
+      seasonId: seasonId ?? _selectedSeasonId,
+    );
+  }
 
   // 👇 2. メモリリークを防ぐため、画面が破棄される時にコントローラーも破棄
   @override
@@ -102,7 +132,7 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('旅人よ、名を記してください。'),
-          backgroundColor: Colors.black87,
+          backgroundColor: Color.fromARGB(221, 247, 247, 247),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -111,6 +141,8 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
 
     HapticFeedback.mediumImpact();
     setState(() => _isSubmitting = true);
+
+    await _saveToLocalStorage(name: trimmedName, seasonId: _selectedSeasonId);
 
     // TODO: Supabaseへの保存処理
     await Future.delayed(const Duration(seconds: 1)); // モック
@@ -317,7 +349,10 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
                 borderSide: BorderSide(color: _waBlack.withValues(alpha: 0.1)),
               ),
             ),
-            onChanged: (_) => setState(() {}),
+            onChanged: (value) {
+              setState(() {});
+              _saveToLocalStorage(name: value);
+            },
           ),
         ],
       ),
@@ -330,10 +365,11 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
         final isSelected = season.id == _selectedSeasonId;
 
         return GestureDetector(
-          onTap: () {
+          onTap: () async {
             if (!isSelected) {
               HapticFeedback.selectionClick();
               setState(() => _selectedSeasonId = season.id);
+              await _saveToLocalStorage(seasonId: season.id);
             }
           },
           child: AnimatedContainer(
