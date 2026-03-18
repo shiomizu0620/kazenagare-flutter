@@ -2,16 +2,14 @@ name: Flutter CI
 
 # mainブランチへのPush、またはプルリクエスト作成時に自動実行される
 on:
+  workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches: [ "**" ]
     paths-ignore:
       - "README.md"
       - "**/*.md"
   pull_request:
     branches: [ "main" ]
-    paths-ignore:
-      - "README.md"
-      - "**/*.md"
 
 concurrency:
   group: flutter-ci-${{ github.workflow }}-${{ github.ref }}
@@ -19,6 +17,7 @@ concurrency:
 
 jobs:
   build-and-test:
+    name: build-and-test
     runs-on: ubuntu-latest
 
     steps:
