@@ -9,7 +9,6 @@ class _GardenControlsConfig {
   static const double moveSpeedPerSecond = 300;
   static const double stickBaseSize = 120;
   static const double stickKnobSize = 44;
-  static const double stickPadding = 16;
 }
 
 class GardenScreen extends StatefulWidget {
@@ -30,6 +29,13 @@ class _GardenScreenState extends State<GardenScreen>
     'winter': 'assets/images/庭-冬.png',
   };
 
+  static const String _catIdleAsset = 'assets/images/charactor/猫1.png';
+  static const List<String> _catWalkAssets = [
+    'assets/images/charactor/猫1.png',
+    'assets/images/charactor/猫2.png',
+  ];
+  static const double _walkFrameIntervalSeconds = 0.16;
+
   String get _gardenBackgroundAsset =>
       _seasonBackgroundAssets[widget.seasonId] ??
       _seasonBackgroundAssets['spring']!;
@@ -38,6 +44,9 @@ class _GardenScreenState extends State<GardenScreen>
   static const double _logicalGardenWidth = 2000.0;
   static const double _logicalGardenHeight = 1500.0;
   static const double _zoom = 1.6;
+  static const double _playerBodySize = 72.0;
+  static const double _playerVisualWidth = 72.0;
+  static const double _playerVisualHeight = 88.0;
 
   // 仮のプレイヤー座標（ワールド座標）
   double _playerX = _logicalGardenWidth / 2;
@@ -59,6 +68,13 @@ class _GardenScreenState extends State<GardenScreen>
   bool _moveRight = false;
 
   Offset _stickInput = Offset.zero;
+  Offset? _floatingStickCenter;
+  int? _activeStickPointer;
+
+  String _currentPlayerAsset = _catIdleAsset;
+  int _walkFrameIndex = 0;
+  double _walkFrameTimer = 0;
+  bool _isFacingRight = true;
 
   @override
   void initState() {
@@ -91,6 +107,8 @@ class _GardenScreenState extends State<GardenScreen>
     if (_didPrecache) return;
     _didPrecache = true;
     precacheImage(AssetImage(_gardenBackgroundAsset), context);
+    precacheImage(const AssetImage('assets/images/charactor/猫1.png'), context);
+    precacheImage(const AssetImage('assets/images/charactor/猫2.png'), context);
   }
 
   ({double minX, double maxX, double minY, double maxY}) _cameraBounds(
@@ -133,18 +151,38 @@ class _GardenScreenState extends State<GardenScreen>
     }
   }
 
-  void _movePlayerByDelta(double deltaX, double deltaY) {
+  bool _movePlayerByDelta(double deltaX, double deltaY) {
+    if (_viewportSize == Size.zero) return false;
+
+    final nextX = (_playerX + deltaX)
+        .clamp(0.0, _logicalGardenWidth)
+        .toDouble();
+    final nextY = (_playerY + deltaY)
+        .clamp(0.0, _logicalGardenHeight)
+        .toDouble();
+    if (nextX == _playerX && nextY == _playerY) return false;
+
+    setState(() {
+      _playerX = nextX;
+      _playerY = nextY;
+      _syncCameraToPlayer();
+    });
+
+    return true;
+  }
+
+  void _syncCameraToPlayer() {
     if (_viewportSize == Size.zero) return;
 
     final bounds = _cameraBounds(_viewportSize);
+    final nextCamera = Offset(
+      _playerX.clamp(bounds.minX, bounds.maxX).toDouble(),
+      _playerY.clamp(bounds.minY, bounds.maxY).toDouble(),
+    );
 
-    final nextX = (_playerX + deltaX).clamp(bounds.minX, bounds.maxX);
-    final nextY = (_playerY + deltaY).clamp(bounds.minY, bounds.maxY);
-    if (nextX == _playerX && nextY == _playerY) return;
-
-    _playerX = nextX;
-    _playerY = nextY;
-    _cameraPosition.value = Offset(_playerX, _playerY);
+    if (_cameraPosition.value != nextCamera) {
+      _cameraPosition.value = nextCamera;
+    }
   }
 
   void _tickMovement(double deltaSeconds) {
@@ -159,11 +197,57 @@ class _GardenScreenState extends State<GardenScreen>
     final input = keyboardInput.distanceSquared > 0
         ? keyboardInput
         : _stickInput;
-    if (input.distanceSquared == 0) return;
+    final hasInput = input.distanceSquared > 0;
+    if (!hasInput) {
+      _updatePlayerAnimation(deltaSeconds, isMoving: false);
+      return;
+    }
 
     final normalized = input.distance > 1 ? input / input.distance : input;
+    _updateFacingDirection(normalized.dx);
     final step = _GardenControlsConfig.moveSpeedPerSecond * deltaSeconds;
-    _movePlayerByDelta(normalized.dx * step, normalized.dy * step);
+    final moved = _movePlayerByDelta(
+      normalized.dx * step,
+      normalized.dy * step,
+    );
+    _updatePlayerAnimation(deltaSeconds, isMoving: moved || hasInput);
+  }
+
+  void _updatePlayerAnimation(double deltaSeconds, {required bool isMoving}) {
+    if (!isMoving) {
+      _walkFrameTimer = 0;
+      _walkFrameIndex = 0;
+      if (_currentPlayerAsset != _catIdleAsset) {
+        setState(() {
+          _currentPlayerAsset = _catIdleAsset;
+        });
+      }
+      return;
+    }
+
+    _walkFrameTimer += deltaSeconds;
+    if (_walkFrameTimer < _walkFrameIntervalSeconds) return;
+
+    _walkFrameTimer -= _walkFrameIntervalSeconds;
+    _walkFrameIndex = (_walkFrameIndex + 1) % _catWalkAssets.length;
+    final nextAsset = _catWalkAssets[_walkFrameIndex];
+    if (nextAsset == _currentPlayerAsset) return;
+
+    setState(() {
+      _currentPlayerAsset = nextAsset;
+    });
+  }
+
+  void _updateFacingDirection(double dx) {
+    const threshold = 0.05;
+    if (dx.abs() < threshold) return;
+
+    final shouldFaceRight = dx > 0;
+    if (_isFacingRight == shouldFaceRight) return;
+
+    setState(() {
+      _isFacingRight = shouldFaceRight;
+    });
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
@@ -318,6 +402,7 @@ class _GardenScreenState extends State<GardenScreen>
       body: LayoutBuilder(
         builder: (context, constraints) {
           _viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
+          _syncCameraToPlayer();
           final mobileControls = _isMobileControls(_viewportSize);
 
           return Focus(
@@ -327,104 +412,126 @@ class _GardenScreenState extends State<GardenScreen>
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => _keyboardFocusNode.requestFocus(),
-              child: Stack(
-                children: [
-                  // 1) 背景: 庭全体画像を拡大した上で、カメラ位置に応じてずらして表示
-                  ValueListenableBuilder<Offset>(
-                    valueListenable: _cameraPosition,
-                    builder: (context, camera, _) {
-                      final bounds = _cameraBounds(_viewportSize);
-                      final cameraX = camera.dx.clamp(bounds.minX, bounds.maxX);
-                      final cameraY = camera.dy.clamp(bounds.minY, bounds.maxY);
+              child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: mobileControls ? _handleMobilePointerDown : null,
+                onPointerMove: mobileControls ? _handleMobilePointerMove : null,
+                onPointerUp: mobileControls ? _handleMobilePointerUp : null,
+                onPointerCancel: mobileControls
+                    ? _handleMobilePointerCancel
+                    : null,
+                child: Stack(
+                  children: [
+                    // 1) 背景: 庭全体画像を拡大した上で、カメラ位置に応じてずらして表示
+                    ValueListenableBuilder<Offset>(
+                      valueListenable: _cameraPosition,
+                      builder: (context, camera, _) {
+                        final bounds = _cameraBounds(_viewportSize);
+                        final cameraX = camera.dx.clamp(
+                          bounds.minX,
+                          bounds.maxX,
+                        );
+                        final cameraY = camera.dy.clamp(
+                          bounds.minY,
+                          bounds.maxY,
+                        );
 
-                      final backgroundLeft =
-                          -(cameraX * _zoom - _viewportSize.width / 2);
-                      final backgroundTop =
-                          -(cameraY * _zoom - _viewportSize.height / 2);
+                        final backgroundLeft =
+                            -(cameraX * _zoom - _viewportSize.width / 2);
+                        final backgroundTop =
+                            -(cameraY * _zoom - _viewportSize.height / 2);
 
-                      return Positioned(
-                        left: backgroundLeft,
-                        top: backgroundTop,
-                        width: _logicalGardenWidth * _zoom,
-                        height: _logicalGardenHeight * _zoom,
-                        child: RepaintBoundary(
-                          child: Image.asset(
-                            _gardenBackgroundAsset,
-                            fit: BoxFit.fill,
-                            filterQuality: FilterQuality.low,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: Colors.black,
-                                alignment: Alignment.center,
-                                child: Text(
-                                  '背景画像が見つかりません\n$_gardenBackgroundAsset',
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                        final playerScreenX =
+                            (_playerX - cameraX) * _zoom +
+                            _viewportSize.width / 2;
+                        final playerScreenY =
+                            (_playerY - cameraY) * _zoom +
+                            _viewportSize.height / 2;
+
+                        return Stack(
+                          children: [
+                            Positioned(
+                              left: backgroundLeft,
+                              top: backgroundTop,
+                              width: _logicalGardenWidth * _zoom,
+                              height: _logicalGardenHeight * _zoom,
+                              child: RepaintBoundary(
+                                child: Image.asset(
+                                  _gardenBackgroundAsset,
+                                  fit: BoxFit.fill,
+                                  filterQuality: FilterQuality.low,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      color: Colors.black,
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '背景画像が見つかりません\n$_gardenBackgroundAsset',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
-                              );
-                            },
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-
-                  // 2) 中央固定の仮キャラクター
-                  Align(
-                    alignment: Alignment.center,
-                    child: _buildPlayerCharacter(),
-                  ),
-
-                  // 3) HUD: 新しいUI群
-
-                  // 左上のヘッダーチップ
-                  Positioned(left: 0, top: 0, child: _buildHeaderChips()),
-
-                  // 右上（図鑑・オプション）のボタン
-                  Positioned.fill(child: _buildActionButtons()),
-
-                  // PC向け操作ヒント（下部中央）
-                  if (!mobileControls)
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 24),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.45),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.25),
+                              ),
                             ),
-                          ),
-                          child: const Text(
-                            'WASD / 矢印キーで移動',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+
+                            Positioned(
+                              left: playerScreenX - _playerVisualWidth / 2,
+                              top: playerScreenY - _playerVisualHeight / 2,
+                              child: _buildPlayerCharacter(),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+
+                    // 2) HUD: 新しいUI群
+
+                    // 左上のヘッダーチップ
+                    Positioned(left: 0, top: 0, child: _buildHeaderChips()),
+
+                    // 右上（図鑑・オプション）のボタン
+                    Positioned.fill(child: _buildActionButtons()),
+
+                    // PC向け操作ヒント（下部中央）
+                    if (!mobileControls)
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 24),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.45),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.25),
+                              ),
+                            ),
+                            child: const Text(
+                              'WASD / 矢印キーで移動',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
 
-                  // 仮想スティック (モバイル向け、右下)
-                  if (mobileControls)
-                    Positioned(
-                      right: _GardenControlsConfig.stickPadding,
-                      bottom: _GardenControlsConfig.stickPadding,
-                      child: _buildVirtualStick(),
-                    ),
-                ],
+                    // 仮想スティック (モバイル向け、右下)
+                    if (mobileControls && _floatingStickCenter != null)
+                      _buildVirtualStick(_floatingStickCenter!),
+                  ],
+                ),
               ),
             ),
           );
@@ -438,16 +545,10 @@ class _GardenScreenState extends State<GardenScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 72,
-          height: 72,
+          width: _playerBodySize,
+          height: _playerBodySize,
           decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              colors: [Color(0xFFB2EBF2), Color(0xFF80DEEA)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            border: Border.all(color: Colors.white, width: 2),
+            borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.35),
@@ -456,14 +557,13 @@ class _GardenScreenState extends State<GardenScreen>
               ),
             ],
           ),
-          child: const Center(
-            child: Text(
-              '旅',
-              style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF0B1A21),
-              ),
+          clipBehavior: Clip.antiAlias,
+          child: Transform.flip(
+            flipX: _isFacingRight,
+            child: Image.asset(
+              _currentPlayerAsset,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
             ),
           ),
         ),
@@ -480,66 +580,100 @@ class _GardenScreenState extends State<GardenScreen>
     );
   }
 
-  Widget _buildVirtualStick() {
+  Widget _buildVirtualStick(Offset center) {
     const double baseSize = _GardenControlsConfig.stickBaseSize;
     const double knobSize = _GardenControlsConfig.stickKnobSize;
     const double radius = (baseSize - knobSize) / 2;
 
-    return GestureDetector(
-      onPanStart: (details) {
-        _updateStickInput(details.localPosition, baseSize, radius);
-      },
-      onPanUpdate: (details) {
-        _updateStickInput(details.localPosition, baseSize, radius);
-      },
-      onPanEnd: (_) {
-        setState(() {
-          _stickInput = Offset.zero;
-        });
-      },
-      onPanCancel: () {
-        setState(() {
-          _stickInput = Offset.zero;
-        });
-      },
-      child: Container(
-        width: baseSize,
-        height: baseSize,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: Colors.black.withValues(alpha: 0.3),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              left: (baseSize - knobSize) / 2 + (_stickInput.dx * radius),
-              top: (baseSize - knobSize) / 2 + (_stickInput.dy * radius),
-              child: Container(
-                width: knobSize,
-                height: knobSize,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: 0.9),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.25),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
+    final clampedCenter = Offset(
+      center.dx.clamp(baseSize / 2, _viewportSize.width - baseSize / 2),
+      center.dy.clamp(baseSize / 2, _viewportSize.height - baseSize / 2),
+    );
+
+    return Positioned(
+      left: clampedCenter.dx - baseSize / 2,
+      top: clampedCenter.dy - baseSize / 2,
+      child: IgnorePointer(
+        child: Container(
+          width: baseSize,
+          height: baseSize,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.black.withValues(alpha: 0.3),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                left: (baseSize - knobSize) / 2 + (_stickInput.dx * radius),
+                top: (baseSize - knobSize) / 2 + (_stickInput.dy * radius),
+                child: Container(
+                  width: knobSize,
+                  height: knobSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.9),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  void _updateStickInput(Offset localPosition, double baseSize, double radius) {
-    final center = Offset(baseSize / 2, baseSize / 2);
-    final delta = localPosition - center;
+  void _handleMobilePointerDown(PointerDownEvent event) {
+    if (_activeStickPointer != null) return;
+
+    _activeStickPointer = event.pointer;
+    setState(() {
+      _floatingStickCenter = event.localPosition;
+      _stickInput = Offset.zero;
+    });
+  }
+
+  void _handleMobilePointerMove(PointerMoveEvent event) {
+    if (_activeStickPointer != event.pointer || _floatingStickCenter == null) {
+      return;
+    }
+    _updateStickInputFromPointer(event.localPosition);
+  }
+
+  void _handleMobilePointerUp(PointerUpEvent event) {
+    if (_activeStickPointer != event.pointer) return;
+    _deactivateFloatingStick();
+  }
+
+  void _handleMobilePointerCancel(PointerCancelEvent event) {
+    if (_activeStickPointer != event.pointer) return;
+    _deactivateFloatingStick();
+  }
+
+  void _deactivateFloatingStick() {
+    setState(() {
+      _activeStickPointer = null;
+      _floatingStickCenter = null;
+      _stickInput = Offset.zero;
+    });
+  }
+
+  void _updateStickInputFromPointer(Offset pointerPosition) {
+    final center = _floatingStickCenter;
+    if (center == null) return;
+
+    const double baseSize = _GardenControlsConfig.stickBaseSize;
+    const double knobSize = _GardenControlsConfig.stickKnobSize;
+    const double radius = (baseSize - knobSize) / 2;
+
+    final delta = pointerPosition - center;
     final normalized = delta.distance > radius
         ? delta / delta.distance
         : delta / radius;
