@@ -41,6 +41,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('庭園の準備'), findsOneWidget);
-    expect(find.text('旅人よ、名を記してください'), findsOneWidget);
+    expect(find.text('季節の気配'), findsOneWidget);
   });
 }

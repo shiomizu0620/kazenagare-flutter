@@ -69,10 +69,15 @@ class _TitleScreenState extends State<TitleScreen> {
             // 1. 背景画像レイヤー（ぼかし＋暗くするフィルター）
             Positioned.fill(
               child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 10, sigmaY: 10), // blur(20px)の再現
+                imageFilter: ImageFilter.blur(
+                  sigmaX: 10,
+                  sigmaY: 10,
+                ), // blur(20px)の再現
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.3), // brightness(0.7)の再現
+                    color: Colors.black.withValues(
+                      alpha: 0.3,
+                    ), // brightness(0.7)の再現
                     // 実際はここに Image.asset で庭の背景を入れます
                     // image: DecorationImage(image: AssetImage('assets/images/bg.png'), fit: BoxFit.cover),
                   ),
@@ -151,11 +156,9 @@ class _AuthPanelState extends State<AuthPanel> {
   bool _isLoggingIn = false;
 
   Future<void> _goToSetupScreen() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const GardenSetupScreen(),
-      ),
-    );
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (context) => const GardenSetupScreen()));
   }
 
   Future<void> _handleAuth(String method) async {
@@ -163,12 +166,12 @@ class _AuthPanelState extends State<AuthPanel> {
     // TODO: ここにSupabaseの認証ロジックを実装します
     await Future.delayed(const Duration(seconds: 1)); // ローディングのモック
     setState(() => _isLoggingIn = false);
-    
+
     // 成功したら庭画面へ遷移する処理を後で追加
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$methodでログインを試みました')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('$methodでログインを試みました')));
     }
   }
 
@@ -180,7 +183,10 @@ class _AuthPanelState extends State<AuthPanel> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16), // backdrop-blur-xl
+            filter: ImageFilter.blur(
+              sigmaX: 16,
+              sigmaY: 16,
+            ), // backdrop-blur-xl
             child: Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -222,12 +228,17 @@ class _AuthPanelState extends State<AuthPanel> {
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.3),
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('メールアドレスでログイン / 登録', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text(
+                          'メールアドレスでログイン / 登録',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(height: 12),
                         TextField(
                           controller: _emailController,
@@ -246,21 +257,35 @@ class _AuthPanelState extends State<AuthPanel> {
                           children: [
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: _isLoggingIn ? null : () => _handleAuth('ログイン'),
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.lightBlue[800]),
-                                child: const Text('ログイン', style: TextStyle(color: Colors.white)),
+                                onPressed: _isLoggingIn
+                                    ? null
+                                    : () => _handleAuth('ログイン'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.lightBlue[800],
+                                ),
+                                child: const Text(
+                                  'ログイン',
+                                  style: TextStyle(color: Colors.white),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: ElevatedButton(
-                                onPressed: _isLoggingIn ? null : () => _handleAuth('新規登録'),
-                                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal[700]),
-                                child: const Text('新規登録', style: TextStyle(color: Colors.white)),
+                                onPressed: _isLoggingIn
+                                    ? null
+                                    : () => _handleAuth('新規登録'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.teal[700],
+                                ),
+                                child: const Text(
+                                  '新規登録',
+                                  style: TextStyle(color: Colors.white),
+                                ),
                               ),
                             ),
                           ],
-                        )
+                        ),
                       ],
                     ),
                   ),
@@ -271,12 +296,21 @@ class _AuthPanelState extends State<AuthPanel> {
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: _isLoggingIn ? null : () => _goToSetupScreen(),
+                          onPressed: _isLoggingIn
+                              ? null
+                              : () => _goToSetupScreen(),
                           style: OutlinedButton.styleFrom(
-                            backgroundColor: Colors.white.withValues(alpha: 0.15),
-                            side: BorderSide(color: Colors.white.withValues(alpha: 0.4)),
+                            backgroundColor: Colors.white.withValues(
+                              alpha: 0.15,
+                            ),
+                            side: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.4),
+                            ),
                           ),
-                          child: const Text('ゲスト体験', style: TextStyle(color: Colors.white)),
+                          child: const Text(
+                            'ゲスト体験',
+                            style: TextStyle(color: Colors.white),
+                          ),
                         ),
                       ),
                     ],
@@ -286,17 +320,33 @@ class _AuthPanelState extends State<AuthPanel> {
                     children: [
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: _isLoggingIn ? null : () => _handleAuth('Google'),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.white.withValues(alpha: 0.9)),
-                          child: const Text('Google', style: TextStyle(color: Colors.black87)),
+                          onPressed: _isLoggingIn
+                              ? null
+                              : () => _handleAuth('Google'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white.withValues(
+                              alpha: 0.9,
+                            ),
+                          ),
+                          child: const Text(
+                            'Google',
+                            style: TextStyle(color: Colors.black87),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: _isLoggingIn ? null : () => _handleAuth('X (Twitter)'),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.black87),
-                          child: const Text('X (Twitter)', style: TextStyle(color: Colors.white)),
+                          onPressed: _isLoggingIn
+                              ? null
+                              : () => _handleAuth('X (Twitter)'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.black87,
+                          ),
+                          child: const Text(
+                            'X (Twitter)',
+                            style: TextStyle(color: Colors.white),
+                          ),
                         ),
                       ),
                     ],
@@ -313,7 +363,10 @@ class _AuthPanelState extends State<AuthPanel> {
   InputDecoration _mistInputDecoration(String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: Colors.black.withValues(alpha: 0.5), fontSize: 14),
+      hintStyle: TextStyle(
+        color: Colors.black.withValues(alpha: 0.5),
+        fontSize: 14,
+      ),
       filled: true,
       fillColor: Colors.white.withValues(alpha: 0.9),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),

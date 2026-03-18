@@ -71,10 +71,10 @@ class GardenSetupScreen extends StatefulWidget {
 
 class _GardenSetupScreenState extends State<GardenSetupScreen> {
   final _nameController = TextEditingController();
-  
+
   // 👇 1. スクロール状態を管理するコントローラーを追加
   final ScrollController _scrollController = ScrollController();
-  
+
   String _selectedSeasonId = 'spring';
   bool _isSubmitting = false;
 
@@ -133,13 +133,11 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
       body: AnimatedContainer(
         duration: const Duration(milliseconds: 800),
         curve: Curves.easeInOut,
-        decoration: BoxDecoration(
-          color: _selectedSeason.baseColor,
-        ),
+        decoration: BoxDecoration(color: _selectedSeason.baseColor),
         child: Stack(
           children: [
             _buildAnimatedBackgroundOrbs(),
-            
+
             Positioned.fill(
               child: BackdropFilter(
                 filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
@@ -152,9 +150,11 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
               child: RawScrollbar(
                 controller: _scrollController,
                 thumbVisibility: true, // 常にスクロールバーを表示
-                thickness: 6.0,        // 少し細めでスタイリッシュに
+                thickness: 6.0, // 少し細めでスタイリッシュに
                 radius: const Radius.circular(10), // 丸みを持たせる
-                thumbColor: _waBlack.withOpacity(0.25), // 半透明の黒で悪目立ちしないように
+                thumbColor: _waBlack.withValues(
+                  alpha: 0.25,
+                ), // 半透明の黒で悪目立ちしないように
                 fadeDuration: const Duration(milliseconds: 300),
                 child: CustomScrollView(
                   controller: _scrollController, // コントローラーを紐付け
@@ -166,14 +166,32 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
                       centerTitle: true,
                       title: Column(
                         children: [
-                          const Text('庭園の準備', style: TextStyle(color: _waBlack, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 2)),
-                          Text('風の便りを待つ場所', style: TextStyle(color: _waBlack.withOpacity(0.5), fontSize: 11, letterSpacing: 1)),
+                          const Text(
+                            '庭園の準備',
+                            style: TextStyle(
+                              color: _waBlack,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          Text(
+                            '風の便りを待つ場所',
+                            style: TextStyle(
+                              color: _waBlack.withValues(alpha: 0.5),
+                              fontSize: 11,
+                              letterSpacing: 1,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     SliverToBoxAdapter(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20.0,
+                          vertical: 16.0,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -181,7 +199,12 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
                             const SizedBox(height: 32),
                             const Text(
                               '季節の気配',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _waBlack, letterSpacing: 1.5),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: _waBlack,
+                                letterSpacing: 1.5,
+                              ),
                             ),
                             const SizedBox(height: 16),
                             _buildSeasonGrid(),
@@ -206,7 +229,9 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 1200),
       curve: Curves.easeInOut,
-      top: _selectedSeasonId == 'spring' || _selectedSeasonId == 'summer' ? -100 : 100,
+      top: _selectedSeasonId == 'spring' || _selectedSeasonId == 'summer'
+          ? -100
+          : 100,
       right: _selectedSeasonId == 'autumn' ? -50 : -100,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 800),
@@ -216,7 +241,7 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
           shape: BoxShape.circle,
           gradient: RadialGradient(
             colors: [
-              _selectedSeason.accentGradient[0].withOpacity(0.6),
+              _selectedSeason.accentGradient[0].withValues(alpha: 0.6),
               Colors.transparent,
             ],
           ),
@@ -229,11 +254,15 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.6),
+        color: Colors.white.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.white, width: 1.5),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 8)),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
         ],
       ),
       child: Column(
@@ -242,21 +271,45 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('お名前', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: _waBlack)),
-              Text('${_nameController.text.length}/$_maxNameLength', style: TextStyle(fontSize: 12, color: _waBlack.withOpacity(0.4))),
+              const Text(
+                'お名前',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: _waBlack,
+                ),
+              ),
+              Text(
+                '${_nameController.text.length}/$_maxNameLength',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: _waBlack.withValues(alpha: 0.4),
+                ),
+              ),
             ],
           ),
           TextField(
             controller: _nameController,
             maxLength: _maxNameLength,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: _waBlack),
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              color: _waBlack,
+            ),
             decoration: InputDecoration(
               hintText: '例: 風流 太郎',
-              hintStyle: TextStyle(color: _waBlack.withOpacity(0.2)),
+              hintStyle: TextStyle(color: _waBlack.withValues(alpha: 0.2)),
               counterText: '',
               border: InputBorder.none,
-              focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: _selectedSeason.accentGradient[0], width: 2)),
-              enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: _waBlack.withOpacity(0.1))),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(
+                  color: _selectedSeason.accentGradient[0],
+                  width: 2,
+                ),
+              ),
+              enabledBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: _waBlack.withValues(alpha: 0.1)),
+              ),
             ),
             onChanged: (_) => setState(() {}),
           ),
@@ -283,14 +336,22 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
             margin: const EdgeInsets.only(bottom: 16),
             transform: Matrix4.translationValues(0, isSelected ? -4 : 0, 0),
             decoration: BoxDecoration(
-              color: isSelected ? Colors.white : Colors.white.withOpacity(0.4),
+              color: isSelected
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.4),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: isSelected ? season.accentGradient[0] : Colors.white,
                 width: isSelected ? 2 : 1.5,
               ),
               boxShadow: isSelected
-                  ? [BoxShadow(color: season.shadowColor, blurRadius: 24, offset: const Offset(0, 12))]
+                  ? [
+                      BoxShadow(
+                        color: season.shadowColor,
+                        blurRadius: 24,
+                        offset: const Offset(0, 12),
+                      ),
+                    ]
                   : [],
             ),
             child: Padding(
@@ -301,10 +362,15 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
                     duration: const Duration(milliseconds: 300),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isSelected ? season.baseColor : Colors.white.withOpacity(0.5),
+                      color: isSelected
+                          ? season.baseColor
+                          : Colors.white.withValues(alpha: 0.5),
                       shape: BoxShape.circle,
                     ),
-                    child: Text(season.icon, style: const TextStyle(fontSize: 24)),
+                    child: Text(
+                      season.icon,
+                      style: const TextStyle(fontSize: 24),
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -315,7 +381,9 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
                           season.name,
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.w600,
                             color: _waBlack,
                           ),
                         ),
@@ -324,7 +392,9 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
                           season.copy,
                           style: TextStyle(
                             fontSize: 12,
-                            color: _waBlack.withOpacity(isSelected ? 0.8 : 0.5),
+                            color: _waBlack.withValues(
+                              alpha: isSelected ? 0.8 : 0.5,
+                            ),
                             height: 1.4,
                           ),
                         ),
@@ -334,7 +404,11 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
                   if (isSelected)
                     FadeTransition(
                       opacity: const AlwaysStoppedAnimation(1.0),
-                      child: Icon(Icons.check_circle, color: season.accentGradient[0], size: 24),
+                      child: Icon(
+                        Icons.check_circle,
+                        color: season.accentGradient[0],
+                        size: 24,
+                      ),
                     ),
                 ],
               ),
@@ -353,7 +427,11 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
         borderRadius: BorderRadius.circular(28),
         gradient: LinearGradient(colors: _selectedSeason.accentGradient),
         boxShadow: [
-          BoxShadow(color: _selectedSeason.shadowColor, blurRadius: 20, offset: const Offset(0, 8)),
+          BoxShadow(
+            color: _selectedSeason.shadowColor,
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
         ],
       ),
       child: Material(
@@ -366,7 +444,10 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
                 ? const SizedBox(
                     width: 24,
                     height: 24,
-                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 3,
+                    ),
                   )
                 : const Text(
                     'この景色で庭へ向かう',
