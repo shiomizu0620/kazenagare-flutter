@@ -24,7 +24,7 @@ class OptionAction {
 class OptionsModal extends StatelessWidget {
   final bool isMe; // 自分の庭かどうかでメニューを切り替えるフラグ
 
-  const OptionsModal({Key? key, this.isMe = true}) : super(key: key);
+  const OptionsModal({super.key, this.isMe = true});
 
   // 外部からモーダルを呼び出すためのヘルパー
   static void show(BuildContext context, {bool isMe = true}) {

@@ -23,7 +23,7 @@ class CatalogItem {
 // 2. 図鑑モーダルのUIコンポーネント
 // ---------------------------------------------------
 class CatalogModal extends StatefulWidget {
-  const CatalogModal({Key? key}) : super(key: key);
+  const CatalogModal({super.key});
 
   // 外部からモーダルを呼び出すためのヘルパーメソッド
   static void show(BuildContext context) {
