@@ -255,13 +255,29 @@ class _AuthPanelState extends State<AuthPanel> {
 
     try {
       final supabase = _safeSupabaseClient();
-      if (supabase == null) {
-        throw Exception('認証基盤が初期化されていません。アプリを再起動してください。');
-      }
 
       if (method == 'ゲスト') {
-        await supabase.auth.signInAnonymously();
+        if (supabase != null) {
+          await supabase.auth.signInAnonymously();
+        } else {
+          final emailDraft = _emailController.text.trim();
+          await _authLocalStorage.saveSignedIn(
+            userId: 'local-guest-${DateTime.now().millisecondsSinceEpoch}',
+            method: 'ゲスト',
+            isGuest: true,
+            email: emailDraft.isEmpty ? null : emailDraft,
+          );
+
+          if (!mounted) return;
+          setState(() => _isLoggingIn = false);
+          await _goToGardenOrSetupOnce();
+          return;
+        }
       } else if (method == 'ログイン' || method == '新規登録') {
+        if (supabase == null) {
+          throw Exception('認証基盤が初期化されていません。アプリを再起動してください。');
+        }
+
         final email = _emailController.text.trim();
         final password = _passwordController.text.trim();
 
@@ -281,6 +297,10 @@ class _AuthPanelState extends State<AuthPanel> {
           );
         }
       } else if (method == 'Google') {
+        if (supabase == null) {
+          throw Exception('認証基盤が初期化されていません。アプリを再起動してください。');
+        }
+
         // Google認証
         await supabase.auth.signInWithOAuth(
           OAuthProvider.google,
