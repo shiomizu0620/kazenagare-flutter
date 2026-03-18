@@ -5,26 +5,42 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:kazenagare_flutter/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('タップでログインパネルが表示される', (WidgetTester tester) async {
+    await tester.pumpWidget(const KazenagareApp());
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(find.text('風流'), findsOneWidget);
+    expect(find.text('画面をタップ'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    final gateLogin = find.text('GATE LOGIN');
+    expect(gateLogin, findsOneWidget);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    final screenHeight =
+        tester.view.physicalSize.height / tester.view.devicePixelRatio;
+    final initialTop = tester.getTopLeft(gateLogin).dy;
+    expect(initialTop, greaterThan(screenHeight));
+
+    await tester.tap(find.text('画面をタップ'));
+    await tester.pumpAndSettle();
+
+    final afterTapTop = tester.getTopLeft(gateLogin).dy;
+    expect(afterTapTop, lessThan(screenHeight));
+  });
+
+  testWidgets('ゲスト体験押下でセットアップ画面へ遷移する', (WidgetTester tester) async {
+    await tester.pumpWidget(const KazenagareApp());
+
+    await tester.tap(find.text('画面をタップ'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('ゲスト体験'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('庭園の準備'), findsOneWidget);
+    expect(find.text('旅人よ、名を記してください'), findsOneWidget);
   });
 }
