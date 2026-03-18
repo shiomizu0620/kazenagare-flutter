@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'garden_screen.dart';
 
 // --- データモデル（変更なし） ---
 class SeasonUiMeta {
@@ -114,17 +115,22 @@ class _GardenSetupScreenState extends State<GardenSetupScreen> {
     // TODO: Supabaseへの保存処理
     await Future.delayed(const Duration(seconds: 1)); // モック
 
+    if (!mounted) return;
     setState(() => _isSubmitting = false);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$trimmedNameさん、${_selectedSeason.name}の庭へ移動します'),
-          backgroundColor: _selectedSeason.accentGradient[0],
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$trimmedNameさん、${_selectedSeason.name}の庭へ移動します'),
+        backgroundColor: _selectedSeason.accentGradient[0],
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    await Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (context) => GardenScreen(seasonId: _selectedSeasonId),
+      ),
+    );
   }
 
   @override
