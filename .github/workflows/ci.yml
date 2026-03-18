@@ -1,0 +1,44 @@
+name: Flutter CI
+
+# mainブランチへのPush、またはプルリクエスト作成時に自動実行される
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. リポジトリのコードを取得
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Flutter環境のセットアップ
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable' # 安定版の最新を使用
+          cache: true       # 2回目以降の実行を高速化するためのキャッシュ
+
+      # 3. パッケージのインストール
+      - name: Install dependencies
+        run: flutter pub get
+
+      # 4. コードのフォーマット確認（崩れていればエラーにする）
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      # 5. 静的解析（エラーや警告がないかチェック）
+      - name: Run Analyze
+        run: flutter analyze
+
+      # 6. テストの実行（将来テストコードを書いた時のため）
+      - name: Run Tests
+        run: flutter test
+
+      # 7. ビルドテスト（Androidのデバッグ用APKが正常に作れるか確認）
+      - name: Build APK (Debug)
+        run: flutter build apk --debug
