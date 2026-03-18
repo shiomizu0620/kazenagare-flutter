@@ -4,8 +4,18 @@ name: Flutter CI
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - "README.md"
+      - "**/*.md"
   pull_request:
     branches: [ "main" ]
+    paths-ignore:
+      - "README.md"
+      - "**/*.md"
+
+concurrency:
+  group: flutter-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
@@ -29,15 +39,32 @@ jobs:
 
       # 4. コードのフォーマット確認（崩れていればエラーにする）
       - name: Verify formatting
-        run: dart format --output=none --set-exit-if-changed .
+        run: dart format --output=none --set-exit-if-changed lib test
 
       # 5. 静的解析（エラーや警告がないかチェック）
       - name: Run Analyze
-        run: flutter analyze
+        run: flutter analyze lib test
 
       # 6. テストの実行（将来テストコードを書いた時のため）
       - name: Run Tests
-        run: flutter test
+        run: flutter test --no-pub
+
+  build-apk:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
 
       # 7. ビルドテスト（Androidのデバッグ用APKが正常に作れるか確認）
       - name: Build APK (Debug)
