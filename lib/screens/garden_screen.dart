@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -9,6 +11,230 @@ class _GardenControlsConfig {
   static const double moveSpeedPerSecond = 300;
   static const double stickBaseSize = 120;
   static const double stickKnobSize = 44;
+}
+
+abstract class _BlockedShape {
+  Rect get bounds;
+
+  bool intersectsCircle(Offset center, double radius);
+
+  Path buildPath();
+}
+
+class _BlockedRectShape implements _BlockedShape {
+  final Rect rect;
+
+  const _BlockedRectShape(this.rect);
+
+  @override
+  Rect get bounds => rect;
+
+  @override
+  bool intersectsCircle(Offset center, double radius) {
+    final closestX = center.dx.clamp(rect.left, rect.right);
+    final closestY = center.dy.clamp(rect.top, rect.bottom);
+
+    final dx = center.dx - closestX;
+    final dy = center.dy - closestY;
+    return dx * dx + dy * dy < radius * radius;
+  }
+
+  @override
+  Path buildPath() => Path()..addRect(rect);
+}
+
+class _BlockedCircleShape implements _BlockedShape {
+  final Offset center;
+  final double radius;
+
+  const _BlockedCircleShape({required this.center, required this.radius});
+
+  @override
+  Rect get bounds => Rect.fromCircle(center: center, radius: radius);
+
+  @override
+  bool intersectsCircle(Offset point, double otherRadius) {
+    final dx = point.dx - center.dx;
+    final dy = point.dy - center.dy;
+    final sum = radius + otherRadius;
+    return dx * dx + dy * dy < sum * sum;
+  }
+
+  @override
+  Path buildPath() => Path()..addOval(bounds);
+}
+
+class _BlockedPolygonShape implements _BlockedShape {
+  final List<Offset> points;
+
+  const _BlockedPolygonShape(this.points);
+
+  @override
+  Rect get bounds {
+    var minX = points.first.dx;
+    var minY = points.first.dy;
+    var maxX = points.first.dx;
+    var maxY = points.first.dy;
+
+    for (final p in points.skip(1)) {
+      if (p.dx < minX) minX = p.dx;
+      if (p.dy < minY) minY = p.dy;
+      if (p.dx > maxX) maxX = p.dx;
+      if (p.dy > maxY) maxY = p.dy;
+    }
+
+    return Rect.fromLTRB(minX, minY, maxX, maxY);
+  }
+
+  @override
+  bool intersectsCircle(Offset center, double radius) {
+    final rect = bounds;
+    if (center.dx + radius < rect.left ||
+        center.dx - radius > rect.right ||
+        center.dy + radius < rect.top ||
+        center.dy - radius > rect.bottom) {
+      return false;
+    }
+
+    if (_containsPoint(center)) {
+      return true;
+    }
+
+    final radiusSq = radius * radius;
+    for (var i = 0; i < points.length; i++) {
+      final a = points[i];
+      final b = points[(i + 1) % points.length];
+      if (_distanceToSegmentSquared(center, a, b) < radiusSq) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  @override
+  Path buildPath() {
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final p in points.skip(1)) {
+      path.lineTo(p.dx, p.dy);
+    }
+    path.close();
+    return path;
+  }
+
+  bool _containsPoint(Offset point) {
+    var inside = false;
+    for (int i = 0, j = points.length - 1; i < points.length; j = i++) {
+      final pi = points[i];
+      final pj = points[j];
+      final intersects =
+          ((pi.dy > point.dy) != (pj.dy > point.dy)) &&
+          (point.dx <
+              (pj.dx - pi.dx) * (point.dy - pi.dy) / (pj.dy - pi.dy) + pi.dx);
+      if (intersects) {
+        inside = !inside;
+      }
+    }
+    return inside;
+  }
+
+  double _distanceToSegmentSquared(Offset p, Offset a, Offset b) {
+    final ab = b - a;
+    final ap = p - a;
+    final abLenSq = ab.dx * ab.dx + ab.dy * ab.dy;
+    if (abLenSq == 0) {
+      final dx = p.dx - a.dx;
+      final dy = p.dy - a.dy;
+      return dx * dx + dy * dy;
+    }
+    final t = ((ap.dx * ab.dx + ap.dy * ab.dy) / abLenSq).clamp(0.0, 1.0);
+    final closest = Offset(a.dx + ab.dx * t, a.dy + ab.dy * t);
+    final dx = p.dx - closest.dx;
+    final dy = p.dy - closest.dy;
+    return dx * dx + dy * dy;
+  }
+}
+
+class _BlockedOverlayPainter extends CustomPainter {
+  final List<Object> blockedShapes;
+  final double backgroundLeft;
+  final double backgroundTop;
+  final double zoom;
+
+  const _BlockedOverlayPainter({
+    required this.blockedShapes,
+    required this.backgroundLeft,
+    required this.backgroundTop,
+    required this.zoom,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fillPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.7)
+      ..style = PaintingStyle.fill;
+
+    final strokePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.16)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4;
+
+    final stripePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.06)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+
+    final transform = Float64List.fromList([
+      zoom,
+      0,
+      0,
+      0,
+      0,
+      zoom,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      backgroundLeft,
+      backgroundTop,
+      0,
+      1,
+    ]);
+
+    for (final rawShape in blockedShapes) {
+      final shape = _GardenScreenState._asBlockedShape(rawShape);
+      final path = shape.buildPath().transform(transform);
+      canvas.drawPath(path, fillPaint);
+      canvas.drawPath(path, strokePaint);
+
+      final clipBounds = path.getBounds();
+      canvas.save();
+      canvas.clipPath(path);
+      const gap = 16.0;
+      for (
+        double x = clipBounds.left - clipBounds.height;
+        x < clipBounds.right + clipBounds.height;
+        x += gap
+      ) {
+        canvas.drawLine(
+          Offset(x, clipBounds.bottom),
+          Offset(x + clipBounds.height, clipBounds.top),
+          stripePaint,
+        );
+      }
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BlockedOverlayPainter oldDelegate) {
+    return oldDelegate.backgroundLeft != backgroundLeft ||
+        oldDelegate.backgroundTop != backgroundTop ||
+        oldDelegate.zoom != zoom ||
+        oldDelegate.blockedShapes != blockedShapes;
+  }
 }
 
 class GardenScreen extends StatefulWidget {
@@ -47,6 +273,194 @@ class _GardenScreenState extends State<GardenScreen>
   static const double _playerBodySize = 72.0;
   static const double _playerVisualWidth = 72.0;
   static const double _playerVisualHeight = 88.0;
+  static const double _playerCollisionRadius = 24.0;
+  static const String _collisionMaskAsset =
+      'assets/images/garden_collision_mask.png';
+  static const bool _showCollisionMaskOverlay = false;
+  static const bool _showLegacyBlockedOverlay = false;
+  static const double _collisionMaskOverlayOpacity = 0.55;
+  static const int _maskAlphaThreshold = 96;
+  static const int _maskDarkThreshold = 52;
+
+  // 添付画像の青塗り領域を高密度に再現した侵入不可エリア（ワールド座標）
+  // 基準: 2000x1500
+  static final List<Object> _blockedAreas = [
+    // =========================
+    // 上部の広域ブロック（ギザギザを多点で再現）
+    // =========================
+    const _BlockedPolygonShape([
+      Offset(0, 0),
+      Offset(2000, 0),
+      Offset(2000, 270),
+      Offset(1938, 248),
+      Offset(1876, 206),
+      Offset(1810, 238),
+      Offset(1748, 193),
+      Offset(1678, 222),
+      Offset(1602, 176),
+      Offset(1526, 214),
+      Offset(1452, 170),
+      Offset(1378, 236),
+      Offset(1306, 182),
+      Offset(1230, 262),
+      Offset(1152, 202),
+      Offset(1080, 282),
+      Offset(1006, 216),
+      Offset(930, 306),
+      Offset(854, 230),
+      Offset(778, 328),
+      Offset(698, 242),
+      Offset(618, 312),
+      Offset(536, 234),
+      Offset(452, 322),
+      Offset(362, 248),
+      Offset(274, 300),
+      Offset(188, 246),
+      Offset(104, 286),
+      Offset(0, 228),
+    ]),
+    const _BlockedCircleShape(center: Offset(324, 246), radius: 72),
+    const _BlockedCircleShape(center: Offset(486, 268), radius: 74),
+    const _BlockedCircleShape(center: Offset(646, 288), radius: 78),
+    const _BlockedCircleShape(center: Offset(814, 300), radius: 80),
+    const _BlockedCircleShape(center: Offset(980, 318), radius: 82),
+    const _BlockedCircleShape(center: Offset(1138, 302), radius: 78),
+    const _BlockedCircleShape(center: Offset(1306, 286), radius: 74),
+    const _BlockedCircleShape(center: Offset(1472, 272), radius: 72),
+    const _BlockedCircleShape(center: Offset(1638, 258), radius: 74),
+    const _BlockedCircleShape(center: Offset(1804, 246), radius: 76),
+
+    // 上部の深い切れ込み（中央〜右）
+    const _BlockedPolygonShape([
+      Offset(778, 282),
+      Offset(902, 244),
+      Offset(1040, 258),
+      Offset(1110, 340),
+      Offset(1014, 430),
+      Offset(868, 404),
+      Offset(780, 336),
+    ]),
+    const _BlockedPolygonShape([
+      Offset(1118, 250),
+      Offset(1264, 232),
+      Offset(1408, 278),
+      Offset(1422, 378),
+      Offset(1310, 452),
+      Offset(1180, 410),
+      Offset(1098, 330),
+    ]),
+    const _BlockedCircleShape(center: Offset(914, 386), radius: 86),
+    const _BlockedCircleShape(center: Offset(1260, 410), radius: 92),
+
+    // =========================
+    // 右上の塊（社周辺）
+    // =========================
+    const _BlockedPolygonShape([
+      Offset(1518, 286),
+      Offset(1638, 252),
+      Offset(1768, 222),
+      Offset(1908, 224),
+      Offset(2000, 254),
+      Offset(2000, 798),
+      Offset(1938, 790),
+      Offset(1868, 726),
+      Offset(1790, 770),
+      Offset(1698, 748),
+      Offset(1610, 706),
+      Offset(1532, 636),
+      Offset(1496, 544),
+      Offset(1498, 444),
+    ]),
+    const _BlockedCircleShape(center: Offset(1820, 408), radius: 126),
+    const _BlockedCircleShape(center: Offset(1900, 518), radius: 128),
+    const _BlockedCircleShape(center: Offset(1948, 646), radius: 118),
+    const _BlockedCircleShape(center: Offset(1780, 646), radius: 98),
+    const _BlockedCircleShape(center: Offset(1658, 612), radius: 90),
+    const _BlockedCircleShape(center: Offset(1590, 516), radius: 88),
+
+    // 右端中腹（青で塗られている縁）
+    const _BlockedPolygonShape([
+      Offset(1948, 640),
+      Offset(2000, 636),
+      Offset(2000, 1030),
+      Offset(1956, 1042),
+      Offset(1916, 980),
+      Offset(1922, 882),
+    ]),
+
+    // =========================
+    // 左下の塊
+    // =========================
+    const _BlockedPolygonShape([
+      Offset(0, 744),
+      Offset(132, 760),
+      Offset(230, 820),
+      Offset(308, 902),
+      Offset(372, 1000),
+      Offset(430, 1112),
+      Offset(472, 1240),
+      Offset(462, 1392),
+      Offset(420, 1500),
+      Offset(0, 1500),
+    ]),
+    const _BlockedCircleShape(center: Offset(98, 892), radius: 148),
+    const _BlockedCircleShape(center: Offset(162, 1032), radius: 152),
+    const _BlockedCircleShape(center: Offset(236, 1186), radius: 162),
+    const _BlockedCircleShape(center: Offset(288, 1340), radius: 176),
+    const _BlockedCircleShape(center: Offset(74, 1266), radius: 164),
+    const _BlockedCircleShape(center: Offset(366, 1088), radius: 106),
+
+    // 左下中央寄りの突起（青塗りの飛び出し）
+    const _BlockedPolygonShape([
+      Offset(404, 1070),
+      Offset(566, 1126),
+      Offset(610, 1228),
+      Offset(548, 1336),
+      Offset(444, 1324),
+      Offset(388, 1214),
+    ]),
+
+    // =========================
+    // 右下の塊（池周辺）
+    // =========================
+    const _BlockedPolygonShape([
+      Offset(1498, 1008),
+      Offset(1628, 1020),
+      Offset(1758, 1062),
+      Offset(1888, 1088),
+      Offset(2000, 1148),
+      Offset(2000, 1500),
+      Offset(1508, 1500),
+      Offset(1458, 1416),
+      Offset(1456, 1302),
+      Offset(1472, 1190),
+    ]),
+    const _BlockedCircleShape(center: Offset(1654, 1244), radius: 168),
+    const _BlockedCircleShape(center: Offset(1814, 1248), radius: 186),
+    const _BlockedCircleShape(center: Offset(1946, 1310), radius: 196),
+    const _BlockedCircleShape(center: Offset(1730, 1410), radius: 156),
+    const _BlockedCircleShape(center: Offset(1870, 1450), radius: 148),
+
+    // 右下池そのものの密な判定
+    const _BlockedCircleShape(center: Offset(1698, 1326), radius: 86),
+    const _BlockedCircleShape(center: Offset(1788, 1318), radius: 92),
+    const _BlockedCircleShape(center: Offset(1874, 1326), radius: 88),
+    const _BlockedCircleShape(center: Offset(1814, 1386), radius: 78),
+
+    // =========================
+    // 微調整: 端抜け防止
+    // =========================
+    const _BlockedRectShape(Rect.fromLTWH(0, 0, 2000, 20)),
+    const _BlockedRectShape(Rect.fromLTWH(0, 1480, 2000, 20)),
+    const _BlockedRectShape(Rect.fromLTWH(0, 0, 20, 1500)),
+    const _BlockedRectShape(Rect.fromLTWH(1980, 0, 20, 1500)),
+  ];
+
+  static _BlockedShape _asBlockedShape(Object area) {
+    if (area is _BlockedShape) return area;
+    if (area is Rect) return _BlockedRectShape(area);
+    throw StateError('Unsupported blocked area type: ${area.runtimeType}');
+  }
 
   // 仮のプレイヤー座標（ワールド座標）
   double _playerX = _logicalGardenWidth / 2;
@@ -57,6 +471,10 @@ class _GardenScreenState extends State<GardenScreen>
   Size _viewportSize = Size.zero;
 
   bool _didPrecache = false;
+  bool _didLoadCollisionMask = false;
+  Uint8List? _collisionMaskRgba;
+  int _collisionMaskWidth = 0;
+  int _collisionMaskHeight = 0;
 
   final FocusNode _keyboardFocusNode = FocusNode();
   late final Ticker _movementTicker;
@@ -107,8 +525,36 @@ class _GardenScreenState extends State<GardenScreen>
     if (_didPrecache) return;
     _didPrecache = true;
     precacheImage(AssetImage(_gardenBackgroundAsset), context);
+    precacheImage(const AssetImage(_collisionMaskAsset), context);
     precacheImage(const AssetImage('assets/images/charactor/猫1.png'), context);
     precacheImage(const AssetImage('assets/images/charactor/猫2.png'), context);
+
+    if (!_didLoadCollisionMask) {
+      _didLoadCollisionMask = true;
+      _loadCollisionMask();
+    }
+  }
+
+  Future<void> _loadCollisionMask() async {
+    try {
+      final data = await rootBundle.load(_collisionMaskAsset);
+      final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final byteData = await image.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      );
+
+      if (!mounted || byteData == null) return;
+
+      setState(() {
+        _collisionMaskRgba = byteData.buffer.asUint8List();
+        _collisionMaskWidth = image.width;
+        _collisionMaskHeight = image.height;
+      });
+    } catch (e) {
+      debugPrint('Failed to load collision mask: $e');
+    }
   }
 
   ({double minX, double maxX, double minY, double maxY}) _cameraBounds(
@@ -154,12 +600,31 @@ class _GardenScreenState extends State<GardenScreen>
   bool _movePlayerByDelta(double deltaX, double deltaY) {
     if (_viewportSize == Size.zero) return false;
 
-    final nextX = (_playerX + deltaX)
+    final candidateX = (_playerX + deltaX)
         .clamp(0.0, _logicalGardenWidth)
         .toDouble();
-    final nextY = (_playerY + deltaY)
+    final candidateY = (_playerY + deltaY)
         .clamp(0.0, _logicalGardenHeight)
         .toDouble();
+
+    var nextX = candidateX;
+    var nextY = candidateY;
+
+    if (_isBlockedPosition(Offset(candidateX, candidateY))) {
+      final xOnly = Offset(candidateX, _playerY);
+      final yOnly = Offset(_playerX, candidateY);
+
+      if (!_isBlockedPosition(xOnly)) {
+        nextX = xOnly.dx;
+        nextY = xOnly.dy;
+      } else if (!_isBlockedPosition(yOnly)) {
+        nextX = yOnly.dx;
+        nextY = yOnly.dy;
+      } else {
+        return false;
+      }
+    }
+
     if (nextX == _playerX && nextY == _playerY) return false;
 
     setState(() {
@@ -169,6 +634,135 @@ class _GardenScreenState extends State<GardenScreen>
     });
 
     return true;
+  }
+
+  bool _isBlockedPosition(Offset position) {
+    if (_collisionMaskRgba != null &&
+        _collisionMaskWidth > 0 &&
+        _collisionMaskHeight > 0) {
+      return _isBlockedByMask(position, _playerCollisionRadius);
+    }
+
+    for (final rawArea in _blockedAreas) {
+      final area = _asBlockedShape(rawArea);
+      if (area.intersectsCircle(position, _playerCollisionRadius)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isBlockedByMask(Offset center, double radius) {
+    final rgba = _collisionMaskRgba;
+    if (rgba == null || _collisionMaskWidth <= 0 || _collisionMaskHeight <= 0) {
+      return false;
+    }
+
+    final clampedX = center.dx.clamp(0.0, _logicalGardenWidth - 1);
+    final clampedY = center.dy.clamp(0.0, _logicalGardenHeight - 1);
+
+    final scaleX = (_collisionMaskWidth - 1) / _logicalGardenWidth;
+    final scaleY = (_collisionMaskHeight - 1) / _logicalGardenHeight;
+
+    final centerPx = clampedX * scaleX;
+    final centerPy = clampedY * scaleY;
+    final radiusPxX = radius * scaleX;
+    final radiusPxY = radius * scaleY;
+
+    final minPx = (centerPx - radiusPxX).floor().clamp(
+      0,
+      _collisionMaskWidth - 1,
+    );
+    final maxPx = (centerPx + radiusPxX).ceil().clamp(
+      0,
+      _collisionMaskWidth - 1,
+    );
+    final minPy = (centerPy - radiusPxY).floor().clamp(
+      0,
+      _collisionMaskHeight - 1,
+    );
+    final maxPy = (centerPy + radiusPxY).ceil().clamp(
+      0,
+      _collisionMaskHeight - 1,
+    );
+
+    final rx = radiusPxX <= 0 ? 0.5 : radiusPxX;
+    final ry = radiusPxY <= 0 ? 0.5 : radiusPxY;
+    final invRxSq = 1.0 / (rx * rx);
+    final invRySq = 1.0 / (ry * ry);
+
+    for (int py = minPy; py <= maxPy; py++) {
+      final dy = py - centerPy;
+      final yTerm = (dy * dy) * invRySq;
+      if (yTerm > 1.0) continue;
+
+      for (int px = minPx; px <= maxPx; px++) {
+        final dx = px - centerPx;
+        final distNorm = (dx * dx) * invRxSq + yTerm;
+        if (distNorm > 1.0) continue;
+        if (_isBlockedMaskPixel(px, py)) return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool _isBlockedMaskPixel(int px, int py) {
+    final rgba = _collisionMaskRgba;
+    if (rgba == null) return false;
+
+    final index = (py * _collisionMaskWidth + px) * 4;
+    if (index < 0 || index + 3 >= rgba.length) return false;
+
+    final r = rgba[index];
+    final g = rgba[index + 1];
+    final b = rgba[index + 2];
+    final a = rgba[index + 3];
+
+    if (a < _maskAlphaThreshold) return false;
+
+    final luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return luma <= _maskDarkThreshold;
+  }
+
+  Widget _buildBlockedOverlayLayer(
+    double backgroundLeft,
+    double backgroundTop,
+  ) {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _BlockedOverlayPainter(
+            blockedShapes: _blockedAreas,
+            backgroundLeft: backgroundLeft,
+            backgroundTop: backgroundTop,
+            zoom: _zoom,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCollisionMaskOverlayLayer(
+    double backgroundLeft,
+    double backgroundTop,
+  ) {
+    return Positioned(
+      left: backgroundLeft,
+      top: backgroundTop,
+      width: _logicalGardenWidth * _zoom,
+      height: _logicalGardenHeight * _zoom,
+      child: IgnorePointer(
+        child: Opacity(
+          opacity: _collisionMaskOverlayOpacity,
+          child: Image.asset(
+            _collisionMaskAsset,
+            fit: BoxFit.fill,
+            filterQuality: FilterQuality.none,
+          ),
+        ),
+      ),
+    );
   }
 
   void _syncCameraToPlayer() {
@@ -478,6 +1072,18 @@ class _GardenScreenState extends State<GardenScreen>
                                 ),
                               ),
                             ),
+
+                            if (_showCollisionMaskOverlay)
+                              _buildCollisionMaskOverlayLayer(
+                                backgroundLeft,
+                                backgroundTop,
+                              ),
+
+                            if (_showLegacyBlockedOverlay)
+                              _buildBlockedOverlayLayer(
+                                backgroundLeft,
+                                backgroundTop,
+                              ),
 
                             Positioned(
                               left: playerScreenX - _playerVisualWidth / 2,
