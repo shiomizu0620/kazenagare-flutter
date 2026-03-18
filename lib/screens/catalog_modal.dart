@@ -1,36 +1,34 @@
 import 'dart:ui';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-// ---------------------------------------------------
-// 1. 図鑑のデータモデル
-// ---------------------------------------------------
-class CatalogItem {
+class SoundObject {
   final String id;
   final String name;
-  final IconData placeholderIcon; // 画像がない時の仮アイコン
-  final bool isUnlocked; // 取得済みかどうか
+  final String imagePath;
+  final String description;
+  final int rewardCoins;
+  final bool isUnlocked;
+  final String effectType;
 
-  CatalogItem({
+  const SoundObject({
     required this.id,
     required this.name,
-    required this.placeholderIcon,
+    required this.imagePath,
+    required this.description,
+    required this.rewardCoins,
     required this.isUnlocked,
+    required this.effectType,
   });
 }
 
-// ---------------------------------------------------
-// 2. 図鑑モーダルのUIコンポーネント
-// ---------------------------------------------------
 class CatalogModal extends StatefulWidget {
   const CatalogModal({super.key});
 
-  // 外部からモーダルを呼び出すためのヘルパーメソッド
   static void show(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // 画面の高さを柔軟に使えるようにする
-      backgroundColor: Colors.transparent, // すりガラス効果のために透明に
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) => const CatalogModal(),
     );
   }
@@ -40,95 +38,259 @@ class CatalogModal extends StatefulWidget {
 }
 
 class _CatalogModalState extends State<CatalogModal> {
-  static const int _itemsPerPage = 4;
-  static const int _itemsPerSpread = _itemsPerPage * 2;
-  int _currentSpread = 0;
+  static const String _title = '風の音コレクション 和の音オブジェクト図鑑';
+  static String? _lastSelectedId;
 
-  // Web版(Next.js)のディレクトリ構成に合わせた仮のアイテムリスト
-  // TODO: 本番ではSupabaseから「ユーザーが取得したアイテムID一覧」を取得して突合する
-  final List<CatalogItem> _items = [
-    CatalogItem(
-      id: 'furin',
+  final List<SoundObject> _objects = const [
+    SoundObject(
+      id: 'huurin',
       name: '風鈴',
-      placeholderIcon: Icons.notifications,
+      imagePath: 'assets/images/objects/huurine.png',
+      description: '声を軽く高域寄りに整え、鈴の余韻を重ねる音色です。',
+      rewardCoins: 22,
       isUnlocked: true,
+      effectType: 'bright_chime',
     ),
-    CatalogItem(
+    SoundObject(
       id: 'semi',
       name: '蝉',
-      placeholderIcon: Icons.bug_report,
+      imagePath: 'assets/images/objects/semie.png',
+      description: '夏の空気感を含んだ細かな周期ノイズを付与します。',
+      rewardCoins: 16,
       isUnlocked: true,
+      effectType: 'cicada_noise',
     ),
-    CatalogItem(
+    SoundObject(
       id: 'shishi-odoshi',
       name: 'ししおどし',
-      placeholderIcon: Icons.water_drop,
+      imagePath: 'assets/images/objects/sisiodosie.png',
+      description: '低域に木の打音を重ね、間を活かした和風パーカッション化。',
+      rewardCoins: 20,
       isUnlocked: false,
+      effectType: 'wood_click',
     ),
-    CatalogItem(
+    SoundObject(
       id: 'kane',
       name: '鐘',
-      placeholderIcon: Icons.sports_mma,
+      imagePath: 'assets/images/objects/kanee.png',
+      description: 'アタックを丸めたうえで鐘の倍音成分を加えます。',
+      rewardCoins: 24,
       isUnlocked: false,
+      effectType: 'temple_bell',
     ),
-    CatalogItem(
+    SoundObject(
       id: 'mattya',
       name: '抹茶',
-      placeholderIcon: Icons.coffee_rounded,
+      imagePath: 'assets/images/objects/mattyae.png',
+      description: '中高域を穏やかにし、柔らかな布フィルタを適用します。',
+      rewardCoins: 14,
       isUnlocked: true,
+      effectType: 'soft_filter',
     ),
-    CatalogItem(
+    SoundObject(
       id: 'takibi',
       name: '焚き火',
-      placeholderIcon: Icons.local_fire_department,
+      imagePath: 'assets/images/objects/takibie.png',
+      description: '低域に火のはぜる粒立ちを追加し温かい質感へ。',
+      rewardCoins: 18,
       isUnlocked: false,
+      effectType: 'fire_crackle',
     ),
-    CatalogItem(
+    SoundObject(
       id: 'kaeru',
       name: '蛙',
-      placeholderIcon: Icons.pest_control,
+      imagePath: 'assets/images/objects/kaerue.png',
+      description: '低めのうねりを重ね、湿度感のある鳴きの揺れを作ります。',
+      rewardCoins: 19,
       isUnlocked: true,
+      effectType: 'frog_wobble',
     ),
-    CatalogItem(
+    SoundObject(
       id: 'hanabi',
       name: '花火',
-      placeholderIcon: Icons.celebration,
+      imagePath: 'assets/images/objects/hanabie.png',
+      description: '高域に拡散ディレイを加え、夜空に散るような響きを作成。',
+      rewardCoins: 28,
       isUnlocked: false,
+      effectType: 'spark_delay',
     ),
-    CatalogItem(
+    SoundObject(
       id: 'suzume',
       name: '雀',
-      placeholderIcon: Icons.flutter_dash,
+      imagePath: 'assets/images/objects/suzumee.png',
+      description: '短いピッチ変動で軽快なさえずり感を付けます。',
+      rewardCoins: 17,
       isUnlocked: false,
+      effectType: 'chirp_pitch',
     ),
-    CatalogItem(
+    SoundObject(
       id: 'obake',
       name: 'お化け',
-      placeholderIcon: Icons.coronavirus,
-      isUnlocked: false,
+      imagePath: 'assets/images/objects/obakee.png',
+      description: 'フォルマントを下げて怪異感のあるボイスに変換。',
+      rewardCoins: 30,
+      isUnlocked: true,
+      effectType: 'ghost_formant',
+    ),
+    SoundObject(
+      id: 'akimusi',
+      name: '秋虫',
+      imagePath: 'assets/images/objects/akimusie.png',
+      description: '細い高域トレモロで秋の夜らしい気配を追加。',
+      rewardCoins: 15,
+      isUnlocked: true,
+      effectType: 'autumn_tremolo',
+    ),
+    SoundObject(
+      id: 'hagoita',
+      name: '羽子板',
+      imagePath: 'assets/images/objects/hagoitae.png',
+      description: '木と羽根の乾いた反射音をリズミカルに重ねます。',
+      rewardCoins: 21,
+      isUnlocked: true,
+      effectType: 'bat_hit',
+    ),
+    SoundObject(
+      id: 'haka',
+      name: '墓',
+      imagePath: 'assets/images/objects/hakae.png',
+      description: '残響を長めに設定し、石室のような空間を演出。',
+      rewardCoins: 23,
+      isUnlocked: true,
+      effectType: 'stone_reverb',
+    ),
+    SoundObject(
+      id: 'hue',
+      name: '笛',
+      imagePath: 'assets/images/objects/huee.png',
+      description: '鼻腔寄りの倍音を持ち上げ、和笛ライクな音色へ。',
+      rewardCoins: 20,
+      isUnlocked: true,
+      effectType: 'flute_formant',
+    ),
+    SoundObject(
+      id: 'huro',
+      name: '風呂',
+      imagePath: 'assets/images/objects/huroe.png',
+      description: '浴室反射を模した短い多段リバーブを適用。',
+      rewardCoins: 12,
+      isUnlocked: true,
+      effectType: 'bath_reverb',
+    ),
+    SoundObject(
+      id: 'ka',
+      name: '蚊',
+      imagePath: 'assets/images/objects/kae.png',
+      description: '高周波のうなりを薄く追加し耳元感を演出。',
+      rewardCoins: 11,
+      isUnlocked: true,
+      effectType: 'mosquito_whine',
+    ),
+    SoundObject(
+      id: 'kame',
+      name: '亀',
+      imagePath: 'assets/images/objects/kamee.png',
+      description: '低速モジュレーションで重心の低い鳴りに寄せます。',
+      rewardCoins: 13,
+      isUnlocked: true,
+      effectType: 'slow_wobble',
+    ),
+    SoundObject(
+      id: 'sansin',
+      name: '三線',
+      imagePath: 'assets/images/objects/sansine.png',
+      description: '胴鳴り感のある中域を強調した弦系テイスト。',
+      rewardCoins: 25,
+      isUnlocked: true,
+      effectType: 'sanshin_string',
+    ),
+    SoundObject(
+      id: 'saru',
+      name: '猿',
+      imagePath: 'assets/images/objects/sarue.png',
+      description: '歪みを抑えつつ跳ねるような中高域を付与。',
+      rewardCoins: 17,
+      isUnlocked: true,
+      effectType: 'playful_peak',
+    ),
+    SoundObject(
+      id: 'suzu',
+      name: '鈴',
+      imagePath: 'assets/images/objects/suzue.png',
+      description: '金属の短い余韻を重ねて明るいトーンに補正。',
+      rewardCoins: 18,
+      isUnlocked: true,
+      effectType: 'small_bell',
+    ),
+    SoundObject(
+      id: 'tako',
+      name: '凧',
+      imagePath: 'assets/images/objects/takoe.png',
+      description: '風切り成分を追加し、空を切るような質感へ。',
+      rewardCoins: 16,
+      isUnlocked: true,
+      effectType: 'wind_slice',
+    ),
+    SoundObject(
+      id: 'tyoutyo',
+      name: '蝶々',
+      imagePath: 'assets/images/objects/tyoutyoe.png',
+      description: '左右に揺れるパンニングで羽ばたきの軽さを表現。',
+      rewardCoins: 19,
+      isUnlocked: true,
+      effectType: 'flutter_pan',
+    ),
+    SoundObject(
+      id: 'youko',
+      name: '妖狐',
+      imagePath: 'assets/images/objects/youkoe.png',
+      description: '神秘的な広がりを持つ深いリバーブを適用します。',
+      rewardCoins: 32,
+      isUnlocked: true,
+      effectType: 'mystic_tail',
     ),
   ];
 
-  int get _totalSpreads => (_items.length / _itemsPerSpread).ceil();
+  SoundObject? _selectedObject;
 
-  List<CatalogItem> _sliceItems(int start, int count) {
-    if (start >= _items.length) return const [];
-    final end = math.min(start + count, _items.length);
-    return _items.sublist(start, end);
+  @override
+  void initState() {
+    super.initState();
+    _selectedObject = _resolveInitialSelection();
+  }
+
+  SoundObject _resolveInitialSelection() {
+    if (_objects.isEmpty) {
+      throw StateError('Sound objects must not be empty.');
+    }
+
+    final savedId = _lastSelectedId;
+    if (savedId != null) {
+      final index = _objects.indexWhere((o) => o.id == savedId);
+      if (index >= 0) return _objects[index];
+    }
+    return _objects.first;
+  }
+
+  void _selectObject(SoundObject object) {
+    setState(() {
+      _selectedObject = object;
+      _lastSelectedId = object.id;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // 画面の高さの86%を占めるモーダルにする
-    final modalHeight = MediaQuery.of(context).size.height * 0.86;
-    final spreadStart = _currentSpread * _itemsPerSpread;
-    final leftItems = _sliceItems(spreadStart, _itemsPerPage);
-    final rightItems = _sliceItems(spreadStart + _itemsPerPage, _itemsPerPage);
+    final media = MediaQuery.of(context);
+    final modalHeight = media.size.height * 0.92;
+    final selected = _selectedObject;
+    if (selected == null) {
+      return const SizedBox.shrink();
+    }
 
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       child: BackdropFilter(
-        // 背景の庭をぼかして、モーダルを前景として際立たせる
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
           height: modalHeight,
@@ -150,7 +312,6 @@ class _CatalogModalState extends State<CatalogModal> {
           ),
           child: Column(
             children: [
-              // モーダル上部の引っ張りバー
               const SizedBox(height: 12),
               Container(
                 width: 40,
@@ -161,198 +322,80 @@ class _CatalogModalState extends State<CatalogModal> {
                 ),
               ),
               const SizedBox(height: 16),
-
-              // ヘッダー（タイトル・ページ番号・閉じるボタン）
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '音の図鑑',
-                          style: TextStyle(
-                            color: Color(0xFFF8E8CC),
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 2.8,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'SOUND BESTIARY',
-                          style: TextStyle(
-                            color: Color(0xFFE0C9A5),
-                            fontSize: 10,
-                            letterSpacing: 2.2,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4D3A2C),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: const Color(0xFF8F6E4D).withValues(alpha: 0.6),
-                        ),
-                      ),
+                    Expanded(
                       child: Text(
-                        '${_currentSpread + 1} / $_totalSpreads',
+                        _title,
                         style: const TextStyle(
-                          color: Color(0xFFF0DDC1),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFF8E8CC),
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          fontFamily: 'Noto Serif JP',
+                          height: 1.25,
                         ),
                       ),
                     ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.close,
-                            color: Color(0xFFF3E6D1),
-                          ),
-                          onPressed: () => Navigator.of(context).pop(),
+                    const SizedBox(width: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('閉じる'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFF3E6D1),
+                        side: BorderSide(
+                          color: const Color(0xFFE0C9A5).withValues(alpha: 0.7),
                         ),
-                      ],
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Divider(
                 color: const Color(0xFFD4BA93).withValues(alpha: 0.3),
-                height: 18,
+                height: 1,
                 indent: 24,
                 endIndent: 24,
               ),
 
-              // 本の見開き
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2D2118),
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.28),
-                          blurRadius: 18,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                      border: Border.all(
-                        color: const Color(0xFF9D7B55).withValues(alpha: 0.5),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _buildBookPage(
-                              pageNumber: _currentSpread * 2 + 1,
-                              items: leftItems,
-                              isLeft: true,
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isWide = constraints.maxWidth >= 880;
+                      if (isWide) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 4,
+                              child: _buildDetailPanel(selected),
                             ),
-                          ),
-                          Container(
-                            width: 14,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                                colors: [
-                                  const Color(
-                                    0xFF573D2A,
-                                  ).withValues(alpha: 0.95),
-                                  const Color(
-                                    0xFF2B1E15,
-                                  ).withValues(alpha: 0.95),
-                                  const Color(
-                                    0xFF573D2A,
-                                  ).withValues(alpha: 0.95),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(12),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              flex: 5,
+                              child: _buildGridPanel(isWide: true),
                             ),
-                          ),
-                          Expanded(
-                            child: _buildBookPage(
-                              pageNumber: _currentSpread * 2 + 2,
-                              items: rightItems,
-                              isLeft: false,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+                          ],
+                        );
+                      }
 
-              // ページ送り
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 6, 18, 18),
-                child: Row(
-                  children: [
-                    _buildPageButton(
-                      icon: Icons.keyboard_double_arrow_left_rounded,
-                      label: '前の見開き',
-                      enabled: _currentSpread > 0,
-                      onTap: () {
-                        if (_currentSpread == 0) return;
-                        setState(() {
-                          _currentSpread -= 1;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Container(
-                        height: 40,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: const Color(
-                            0xFF4B3628,
-                          ).withValues(alpha: 0.65),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(
-                              0xFFD6BB92,
-                            ).withValues(alpha: 0.35),
-                          ),
-                        ),
-                        child: Text(
-                          '${_currentSpread * _itemsPerSpread + 1} - ${math.min((_currentSpread + 1) * _itemsPerSpread, _items.length)} / ${_items.length} 件',
-                          style: const TextStyle(
-                            color: Color(0xFFF4E6CF),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    _buildPageButton(
-                      icon: Icons.keyboard_double_arrow_right_rounded,
-                      label: '次の見開き',
-                      enabled: _currentSpread < _totalSpreads - 1,
-                      onTap: () {
-                        if (_currentSpread >= _totalSpreads - 1) return;
-                        setState(() {
-                          _currentSpread += 1;
-                        });
-                      },
-                    ),
-                  ],
+                      return Column(
+                        children: [
+                          _buildDetailPanel(selected),
+                          const SizedBox(height: 12),
+                          Expanded(child: _buildGridPanel(isWide: false)),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
@@ -362,58 +405,190 @@ class _CatalogModalState extends State<CatalogModal> {
     );
   }
 
-  Widget _buildBookPage({
-    required int pageNumber,
-    required List<CatalogItem> items,
-    required bool isLeft,
-  }) {
+  Widget _buildDetailPanel(SoundObject selected) {
+    final isUnlocked = selected.isUnlocked;
+    final displayName = isUnlocked ? selected.name : '？？？';
+    final description = isUnlocked ? selected.description : '未解放です';
+
     return Container(
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4E8D2),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(isLeft ? 14 : 6),
-          bottomLeft: Radius.circular(isLeft ? 14 : 6),
-          topRight: Radius.circular(isLeft ? 6 : 14),
-          bottomRight: Radius.circular(isLeft ? 6 : 14),
+        color: const Color(0xFF2D2118),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFF9D7B55).withValues(alpha: 0.5),
         ),
-        border: Border.all(color: const Color(0xFFD8C0A0)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Text(
-                  '第$pageNumber頁',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4D3A2C),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '1回の再生報酬: ${selected.rewardCoins}コイン',
                   style: const TextStyle(
-                    color: Color(0xFF8A6B49),
-                    fontSize: 11,
+                    color: Color(0xFFF0DDC1),
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const Spacer(),
-                const Icon(
-                  Icons.auto_stories_rounded,
-                  size: 14,
-                  color: Color(0xFFA6845F),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: Column(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6F5A45),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  '試作中',
+                  style: TextStyle(
+                    color: Color(0xFFF6EAD7),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Center(
+            child: Container(
+              width: 170,
+              height: 170,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFE9DCC8),
+                border: Border.all(color: const Color(0xFFA07A4D), width: 2),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  for (var i = 0; i < _itemsPerPage; i++) ...[
-                    Expanded(
-                      child: i < items.length
-                          ? _buildBookEntry(items[i])
-                          : _buildEmptyBookEntry(),
+                  Image.asset(
+                    selected.imagePath,
+                    fit: BoxFit.cover,
+                    filterQuality: FilterQuality.high,
+                    color: isUnlocked
+                        ? null
+                        : Colors.black.withValues(alpha: 0.5),
+                    colorBlendMode: isUnlocked ? null : BlendMode.srcATop,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Center(
+                        child: Icon(
+                          Icons.image_not_supported_outlined,
+                          color: Color(0x8A5A4735),
+                          size: 34,
+                        ),
+                      );
+                    },
+                  ),
+                  if (!isUnlocked)
+                    const Center(
+                      child: Icon(
+                        Icons.lock_rounded,
+                        color: Color(0xFFEDE0CD),
+                        size: 32,
+                      ),
                     ),
-                    if (i < _itemsPerPage - 1)
-                      const Divider(height: 1, color: Color(0x1A6F5234)),
-                  ],
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: Text(
+              displayName,
+              style: const TextStyle(
+                color: Color(0xFFF7E8D0),
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'Noto Serif JP',
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF433023),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFD6BB92).withValues(alpha: 0.35),
+              ),
+            ),
+            child: Text(
+              description,
+              style: const TextStyle(
+                color: Color(0xFFF1E5D3),
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'エフェクトID: ${selected.effectType}',
+            style: TextStyle(
+              color: const Color(0xFFE0C9A5).withValues(alpha: 0.82),
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGridPanel({required bool isWide}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF2D2118),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFF9D7B55).withValues(alpha: 0.5),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'オブジェクト サムネイルを押して詳細を切り替え',
+              style: TextStyle(
+                color: Color(0xFFF5E7D0),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: GridView.builder(
+                itemCount: _objects.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: isWide ? 4 : 3,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  childAspectRatio: 0.84,
+                ),
+                itemBuilder: (context, index) {
+                  final object = _objects[index];
+                  final selected = _selectedObject?.id == object.id;
+                  return _buildObjectTile(object: object, selected: selected);
+                },
               ),
             ),
           ],
@@ -422,116 +597,84 @@ class _CatalogModalState extends State<CatalogModal> {
     );
   }
 
-  Widget _buildBookEntry(CatalogItem item) {
-    final unlocked = item.isUnlocked;
+  Widget _buildObjectTile({
+    required SoundObject object,
+    required bool selected,
+  }) {
+    final isUnlocked = object.isUnlocked;
 
-    return Row(
-      children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: unlocked
-                ? const Color(0xFFE8D6B7)
-                : const Color(0xFFC9B59A).withValues(alpha: 0.7),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: unlocked
-                  ? const Color(0xFFA07A4D)
-                  : const Color(0x8A7B5A3B),
-            ),
-          ),
-          child: Icon(
-            unlocked ? item.placeholderIcon : Icons.question_mark_rounded,
-            color: unlocked ? const Color(0xFF5F432A) : const Color(0x8A5A4735),
-            size: 18,
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _selectObject(object),
+      child: Ink(
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF4D3A2C) : const Color(0xFF3B2C22),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFFE6C898)
+                : const Color(0xFF8C6D4B).withValues(alpha: 0.45),
+            width: selected ? 1.5 : 1,
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                unlocked ? item.name : '？？？',
-                style: TextStyle(
-                  color: unlocked
-                      ? const Color(0xFF4A3320)
-                      : const Color(0xAA6C5845),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xFFE8D6B7),
+                    border: Border.all(color: const Color(0xFFA07A4D)),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.asset(
+                        object.imagePath,
+                        fit: BoxFit.cover,
+                        color: isUnlocked
+                            ? null
+                            : Colors.black.withValues(alpha: 0.55),
+                        colorBlendMode: isUnlocked ? null : BlendMode.srcATop,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.image_not_supported_outlined,
+                            color: Color(0x8A5A4735),
+                            size: 18,
+                          );
+                        },
+                      ),
+                      if (!isUnlocked)
+                        const Align(
+                          alignment: Alignment.center,
+                          child: Icon(
+                            Icons.lock_rounded,
+                            color: Color(0xFFECE0CD),
+                            size: 18,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 6),
               Text(
-                unlocked ? '採集済み' : '未発見',
+                isUnlocked ? object.name : '？？？',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: unlocked
-                      ? const Color(0xFF8C6D4B)
-                      : const Color(0x8A6C5845),
+                  color: isUnlocked
+                      ? const Color(0xFFF4E6CF)
+                      : const Color(0xAAA48A6F),
                   fontSize: 11,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEmptyBookEntry() {
-    return Row(
-      children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFFEADCC6),
-            border: Border.all(color: const Color(0x40A68561)),
-          ),
-          child: const Icon(
-            Icons.horizontal_rule,
-            color: Color(0x6A8E7458),
-            size: 18,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: Container(height: 1, color: const Color(0x3C8D7153))),
-      ],
-    );
-  }
-
-  Widget _buildPageButton({
-    required IconData icon,
-    required String label,
-    required bool enabled,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      height: 40,
-      child: TextButton.icon(
-        onPressed: enabled ? onTap : null,
-        style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFFF3E6CF),
-          disabledForegroundColor: const Color(0x66F3E6CF),
-          backgroundColor: enabled
-              ? const Color(0xFF5D4431).withValues(alpha: 0.85)
-              : const Color(0xFF5D4431).withValues(alpha: 0.45),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: const Color(
-                0xFFD6BB92,
-              ).withValues(alpha: enabled ? 0.45 : 0.18),
-            ),
-          ),
-        ),
-        icon: Icon(icon, size: 18),
-        label: Text(
-          label,
-          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         ),
       ),
     );
