@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../services/setup_local_storage.dart';
 
 import 'title_screen.dart';
 
 class GardenPublishScreen extends StatefulWidget {
   final String gardenName;
+  final String seasonId;
   final String seasonLabel;
   final String timeLabel;
   final int objectCount;
+  final List<Map<String, dynamic>> objectPlacements;
   final String previewImageAsset;
 
   const GardenPublishScreen({
     super.key,
     this.gardenName = '庭-春',
+    this.seasonId = 'spring',
     this.seasonLabel = '春',
     this.timeLabel = '昼',
     this.objectCount = 0,
+    this.objectPlacements = const <Map<String, dynamic>>[],
     this.previewImageAsset = 'assets/images/庭-春.png',
   });
 
@@ -24,6 +31,162 @@ class GardenPublishScreen extends StatefulWidget {
 
 class _GardenPublishScreenState extends State<GardenPublishScreen> {
   bool _isPublished = false;
+  bool _isPublishing = false;
+  final GardenSetupLocalStorage _localStorage = GardenSetupLocalStorage();
+
+  List<Map<String, dynamic>> _normalizedPlacements() {
+    final mapped = <Map<String, dynamic>>[];
+    for (final raw in widget.objectPlacements) {
+      final objectId = (raw['object_id'] ?? raw['id'] ?? raw['objectId'])
+          ?.toString()
+          .trim();
+      if (objectId == null || objectId.isEmpty) continue;
+
+      final displayName = (raw['display_name'] ?? raw['name'])
+          ?.toString()
+          .trim();
+      final imagePath = (raw['image_path'] ?? raw['imagePath'] ?? raw['asset'])
+          ?.toString()
+          .trim();
+
+      final x =
+          _asDouble(raw['x'] ?? raw['pos_x'] ?? raw['position_x']) ?? 1000.0;
+      final y =
+          _asDouble(raw['y'] ?? raw['pos_y'] ?? raw['position_y']) ?? 750.0;
+
+      mapped.add({
+        'object_id': objectId,
+        'display_name': (displayName != null && displayName.isNotEmpty)
+            ? displayName
+            : objectId,
+        'image_path': imagePath ?? '',
+        'x': x,
+        'y': y,
+      });
+    }
+    return mapped;
+  }
+
+  double? _asDouble(Object? value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value.trim());
+    return null;
+  }
+
+  bool _isMissingRelation(Object error) {
+    final text = error.toString();
+    return text.contains('PGRST205') ||
+        (text.contains('relation') && text.contains('does not exist'));
+  }
+
+  Future<bool> _insertWithFallbacks({
+    required String table,
+    required List<Map<String, dynamic>> payloads,
+  }) async {
+    final client = Supabase.instance.client;
+
+    for (final payload in payloads) {
+      try {
+        await client.from(table).insert(payload);
+        return true;
+      } catch (_) {
+        // 列違いなどは次のpayloadで再試行
+      }
+    }
+
+    return false;
+  }
+
+  Future<void> _publishGarden() async {
+    if (_isPublishing) return;
+
+    setState(() {
+      _isPublishing = true;
+    });
+
+    try {
+      final now = DateTime.now().toIso8601String();
+      final saved = await _localStorage.load();
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final ownerName = (saved.name?.trim().isNotEmpty ?? false)
+          ? saved.name!.trim()
+          : '匿名';
+      final objects = _normalizedPlacements();
+      final objectCount = widget.objectCount > 0
+          ? widget.objectCount
+          : objects.length;
+
+      final payloadCandidates = <Map<String, dynamic>>[
+        {
+          'user_id': userId,
+          'owner_display_name': ownerName,
+          'garden_name': widget.gardenName,
+          'season_id': widget.seasonId,
+          'object_count': objectCount,
+          'placed_objects': objects,
+          'preview_asset': widget.previewImageAsset,
+          'published_at': now,
+        },
+        {
+          'owner_name': ownerName,
+          'title': widget.gardenName,
+          'season': widget.seasonId,
+          'objects_count': objectCount,
+          'objects': objects,
+          'preview_asset': widget.previewImageAsset,
+          'published_at': now,
+        },
+        {
+          'garden_name': widget.gardenName,
+          'season_id': widget.seasonId,
+          'placed_objects': objects,
+          'object_count': objectCount,
+        },
+      ];
+
+      var success = false;
+      Object? lastError;
+      for (final table in const ['garden_posts', 'gardens']) {
+        try {
+          success = await _insertWithFallbacks(
+            table: table,
+            payloads: payloadCandidates,
+          );
+          if (success) break;
+        } catch (error) {
+          lastError = error;
+          if (_isMissingRelation(error)) {
+            continue;
+          }
+        }
+      }
+
+      if (!mounted) return;
+
+      if (success) {
+        setState(() {
+          _isPublished = true;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('庭を公開しました')));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '公開に失敗しました${lastError != null ? ' (${lastError.toString()})' : ''}',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPublishing = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,18 +231,14 @@ class _GardenPublishScreenState extends State<GardenPublishScreen> {
                 width: double.infinity,
                 height: 58,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _isPublished = true;
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('庭を公開しました（モック）')),
-                    );
-                  },
+                  onPressed: _isPublishing ? null : _publishGarden,
                   icon: const Icon(Icons.send_rounded, size: 22),
-                  label: const Text(
-                    'この庭を公開する',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  label: Text(
+                    _isPublishing ? '公開中…' : 'この庭を公開する',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF8D8D8D),
@@ -108,9 +267,13 @@ class _GardenPublishScreenState extends State<GardenPublishScreen> {
                   const SizedBox(width: 14),
                   TextButton(
                     onPressed: () {
-                      Navigator.of(context).pushAndRemoveUntil(
+                      Navigator.of(
+                        context,
+                        rootNavigator: true,
+                      ).pushAndRemoveUntil(
                         MaterialPageRoute(
-                          builder: (context) => const TitleScreen(),
+                          builder: (context) =>
+                              const TitleScreen(stayOnTitle: true),
                         ),
                         (route) => false,
                       );
@@ -179,7 +342,7 @@ class _GardenPublishScreenState extends State<GardenPublishScreen> {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: const Text(
-                  'まだ音オブジェクトは置かれていません',
+                  'この庭のしつらえを公開します',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 15,

@@ -29,17 +29,42 @@ class OptionAction {
 // ---------------------------------------------------
 class OptionsModal extends StatelessWidget {
   final bool isMe; // 自分の庭かどうかでメニューを切り替えるフラグ
+  final String seasonId;
+  final String? gardenName;
+  final int objectCount;
+  final List<Map<String, dynamic>> objectPlacements;
   final GardenSetupLocalStorage _localStorage = GardenSetupLocalStorage();
 
-  OptionsModal({super.key, this.isMe = true});
+  OptionsModal({
+    super.key,
+    this.isMe = true,
+    this.seasonId = 'spring',
+    this.gardenName,
+    this.objectCount = 0,
+    this.objectPlacements = const <Map<String, dynamic>>[],
+  });
 
   // 外部からモーダルを呼び出すためのヘルパー
-  static void show(BuildContext context, {bool isMe = true}) {
+  static void show(
+    BuildContext context, {
+    bool isMe = true,
+    String seasonId = 'spring',
+    String? gardenName,
+    int objectCount = 0,
+    List<Map<String, dynamic>> objectPlacements =
+        const <Map<String, dynamic>>[],
+  }) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent, // すりガラスのために透明に
-      builder: (context) => OptionsModal(isMe: isMe),
+      builder: (context) => OptionsModal(
+        isMe: isMe,
+        seasonId: seasonId,
+        gardenName: gardenName,
+        objectCount: objectCount,
+        objectPlacements: objectPlacements,
+      ),
     );
   }
 
@@ -87,9 +112,12 @@ class OptionsModal extends StatelessWidget {
         description: '他の人があなたの庭を訪問できるようにする',
         onTap: () async {
           final saved = await _localStorage.load();
-          final gardenName = (saved.seasonId?.trim().isNotEmpty ?? false)
-              ? '庭-${_seasonLabel(saved.seasonId!)}'
-              : '庭-春';
+          final resolvedSeasonId = seasonId.trim().isNotEmpty
+              ? seasonId
+              : (saved.seasonId ?? 'spring');
+          final resolvedGardenName = (gardenName?.trim().isNotEmpty ?? false)
+              ? gardenName!.trim()
+              : '庭-${_seasonLabel(resolvedSeasonId)}';
 
           if (!context.mounted) return;
           final navigator = Navigator.of(context);
@@ -97,9 +125,12 @@ class OptionsModal extends StatelessWidget {
           navigator.push(
             MaterialPageRoute(
               builder: (context) => GardenPublishScreen(
-                gardenName: gardenName,
-                seasonLabel: _seasonLabel(saved.seasonId ?? 'spring'),
+                gardenName: resolvedGardenName,
+                seasonId: resolvedSeasonId,
+                seasonLabel: _seasonLabel(resolvedSeasonId),
                 timeLabel: '昼',
+                objectCount: objectCount,
+                objectPlacements: objectPlacements,
               ),
             ),
           );
@@ -122,10 +153,10 @@ class OptionsModal extends StatelessWidget {
         label: 'トップへ戻る',
         description: '最初のページへ戻る',
         onTap: () {
-          final navigator = Navigator.of(context);
-          navigator.pop();
-          navigator.pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const TitleScreen()),
+          Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (context) => const TitleScreen(stayOnTitle: true),
+            ),
             (route) => false,
           );
         },
@@ -159,10 +190,10 @@ class OptionsModal extends StatelessWidget {
         label: 'トップへ戻る',
         description: '最初のページへ戻る',
         onTap: () {
-          final navigator = Navigator.of(context);
-          navigator.pop();
-          navigator.pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const TitleScreen()),
+          Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (context) => const TitleScreen(stayOnTitle: true),
+            ),
             (route) => false,
           );
         },

@@ -1,16 +1,68 @@
+import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'catalog_modal.dart'; // ←追加
 import 'options_modal.dart'; // ←これを追加
+import '../widgets/object_video_player_widget.dart';
 
 class _GardenControlsConfig {
-  static const double moveSpeedPerSecond = 300;
+  static const double moveSpeedPerSecond = 400;
   static const double stickBaseSize = 120;
   static const double stickKnobSize = 44;
+}
+
+class _PlacedGardenObject {
+  final String instanceId;
+  final String objectId;
+  final String displayName;
+  final String imagePath;
+  final int rewardCoins;
+  Offset position;
+  DateTime? lastAutoPlayAt;
+  int playSignal = 0;
+
+  _PlacedGardenObject({
+    required this.instanceId,
+    required this.objectId,
+    required this.displayName,
+    required this.imagePath,
+    required this.rewardCoins,
+    required this.position,
+  });
+}
+
+class _ObjectStageConfig {
+  final String videoAsset;
+  final double stageImageSize;
+  final double stageVideoSize;
+  final int rewardCoins;
+
+  const _ObjectStageConfig({
+    required this.videoAsset,
+    required this.stageImageSize,
+    required this.stageVideoSize,
+    required this.rewardCoins,
+  });
+}
+
+class GardenPlacedObject {
+  final String objectId;
+  final String displayName;
+  final String imagePath;
+  final Offset position;
+
+  const GardenPlacedObject({
+    required this.objectId,
+    required this.displayName,
+    required this.imagePath,
+    required this.position,
+  });
 }
 
 abstract class _BlockedShape {
@@ -239,15 +291,26 @@ class _BlockedOverlayPainter extends CustomPainter {
 
 class GardenScreen extends StatefulWidget {
   final String seasonId;
+  final bool allowObjectPlacement;
+  final String? ownerName;
+  final String? gardenName;
+  final List<GardenPlacedObject> initialPlacedObjects;
 
-  const GardenScreen({super.key, this.seasonId = 'spring'});
+  const GardenScreen({
+    super.key,
+    this.seasonId = 'spring',
+    this.allowObjectPlacement = true,
+    this.ownerName,
+    this.gardenName,
+    this.initialPlacedObjects = const <GardenPlacedObject>[],
+  });
 
   @override
   State<GardenScreen> createState() => _GardenScreenState();
 }
 
 class _GardenScreenState extends State<GardenScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const Map<String, String> _seasonBackgroundAssets = {
     'spring': 'assets/images/庭-春.png',
     'summer': 'assets/images/庭-夏.png',
@@ -274,6 +337,180 @@ class _GardenScreenState extends State<GardenScreen>
   static const double _playerVisualWidth = 72.0;
   static const double _playerVisualHeight = 88.0;
   static const double _playerCollisionRadius = 24.0;
+  static const double _placementCollisionRadius = 20.0;
+  static const double _placedObjectVisualSize = 64.0;
+  static const int _maxPlacedObjects = 120;
+  static const double _autoPlayNearDistance = 130.0;
+  static const Duration _autoPlayCooldown = Duration(milliseconds: 2400);
+  static const String _playerPosXKey = 'garden.player.x';
+  static const String _playerPosYKey = 'garden.player.y';
+
+  static const Map<String, String> _objectImageAssets = {
+    'huurin': 'assets/images/objects/huurine.png',
+    'semi': 'assets/images/objects/semie.png',
+    'shishi-odoshi': 'assets/images/objects/sisiodosie.png',
+    'kane': 'assets/images/objects/kanee.png',
+    'mattya': 'assets/images/objects/mattyae.png',
+    'takibi': 'assets/images/objects/takibie.png',
+    'kaeru': 'assets/images/objects/kaerue.png',
+    'hanabi': 'assets/images/objects/hanabie.png',
+    'suzume': 'assets/images/objects/suzumee.png',
+    'obake': 'assets/images/objects/obakee.png',
+    'akimusi': 'assets/images/objects/akimusie.png',
+    'hagoita': 'assets/images/objects/hagoitae.png',
+    'haka': 'assets/images/objects/hakae.png',
+    'hue': 'assets/images/objects/huee.png',
+    'huro': 'assets/images/objects/huroe.png',
+    'kamakura': 'assets/images/objects/kamakurae.png',
+  };
+
+  static const _ObjectStageConfig _defaultStageConfig = _ObjectStageConfig(
+    videoAsset: 'assets/videos/objects/huurin.webm',
+    stageImageSize: 64,
+    stageVideoSize: 82,
+    rewardCoins: 10,
+  );
+
+  static const Map<String, _ObjectStageConfig> _stageConfigs = {
+    'huurin': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/huurin.webm',
+      stageImageSize: 32,
+      stageVideoSize: 50,
+      rewardCoins: 22,
+    ),
+    'shishi-odoshi': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/sisiodosi.webm',
+      stageImageSize: 80,
+      stageVideoSize: 100,
+      rewardCoins: 20,
+    ),
+    'semi': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/semi.webm',
+      stageImageSize: 56,
+      stageVideoSize: 72,
+      rewardCoins: 16,
+    ),
+    'kane': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/kane.webm',
+      stageImageSize: 66,
+      stageVideoSize: 84,
+      rewardCoins: 24,
+    ),
+    'mattya': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/mattya.webm',
+      stageImageSize: 58,
+      stageVideoSize: 76,
+      rewardCoins: 14,
+    ),
+    'takibi': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/takibi.webm',
+      stageImageSize: 64,
+      stageVideoSize: 88,
+      rewardCoins: 18,
+    ),
+    'kaeru': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/kaeru.webm',
+      stageImageSize: 60,
+      stageVideoSize: 80,
+      rewardCoins: 19,
+    ),
+    'hanabi': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/hanabi.webm',
+      stageImageSize: 66,
+      stageVideoSize: 92,
+      rewardCoins: 28,
+    ),
+    'suzume': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/suzume.webm',
+      stageImageSize: 56,
+      stageVideoSize: 74,
+      rewardCoins: 17,
+    ),
+    'obake': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/obake.webm',
+      stageImageSize: 62,
+      stageVideoSize: 84,
+      rewardCoins: 30,
+    ),
+    'akimusi': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/akimusi.webm',
+      stageImageSize: 58,
+      stageVideoSize: 76,
+      rewardCoins: 15,
+    ),
+    'hagoita': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/hagoita.webm',
+      stageImageSize: 62,
+      stageVideoSize: 82,
+      rewardCoins: 21,
+    ),
+    'haka': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/haka.webm',
+      stageImageSize: 66,
+      stageVideoSize: 86,
+      rewardCoins: 23,
+    ),
+    'hue': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/hue.webm',
+      stageImageSize: 58,
+      stageVideoSize: 76,
+      rewardCoins: 20,
+    ),
+    'huro': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/huro.webm',
+      stageImageSize: 62,
+      stageVideoSize: 80,
+      rewardCoins: 12,
+    ),
+    'ka': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/ka.webm',
+      stageImageSize: 52,
+      stageVideoSize: 68,
+      rewardCoins: 11,
+    ),
+    'kame': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/kame.webm',
+      stageImageSize: 62,
+      stageVideoSize: 80,
+      rewardCoins: 13,
+    ),
+    'sansin': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/sansin.webm',
+      stageImageSize: 68,
+      stageVideoSize: 90,
+      rewardCoins: 25,
+    ),
+    'saru': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/saru.webm',
+      stageImageSize: 60,
+      stageVideoSize: 80,
+      rewardCoins: 17,
+    ),
+    'suzu': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/suzu.webm',
+      stageImageSize: 54,
+      stageVideoSize: 70,
+      rewardCoins: 18,
+    ),
+    'tako': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/tako.webm',
+      stageImageSize: 62,
+      stageVideoSize: 82,
+      rewardCoins: 16,
+    ),
+    'tyoutyo': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/tyoutyo.webm',
+      stageImageSize: 56,
+      stageVideoSize: 74,
+      rewardCoins: 19,
+    ),
+    'youko': _ObjectStageConfig(
+      videoAsset: 'assets/videos/objects/youko.webm',
+      stageImageSize: 70,
+      stageVideoSize: 94,
+      rewardCoins: 32,
+    ),
+  };
   static const String _collisionMaskAsset =
       'assets/images/garden_collision_mask.png';
   static const bool _showCollisionMaskOverlay = false;
@@ -494,9 +731,140 @@ class _GardenScreenState extends State<GardenScreen>
   double _walkFrameTimer = 0;
   bool _isFacingRight = true;
 
+  List<_PlacedGardenObject>? _placedObjects;
+  SoundObject? _pendingPlacementObject;
+  Offset? _mobilePlacementPreviewWorld;
+  Timer? _positionSaveTimer;
+  int _coinBalance = 0;
+
+  List<_PlacedGardenObject> get _placedObjectsSafe =>
+      _placedObjects ??= <_PlacedGardenObject>[];
+
+  String _fallbackImagePathForObject(String objectId) {
+    return _objectImageAssets[objectId] ?? _objectImageAssets['huurin']!;
+  }
+
+  _PlacedGardenObject _toPlacedGardenObject(
+    GardenPlacedObject source,
+    int index,
+  ) {
+    final normalizedObjectId = source.objectId.trim().isEmpty
+        ? 'huurin'
+        : source.objectId.trim();
+
+    final displayName = source.displayName.trim().isEmpty
+        ? normalizedObjectId
+        : source.displayName.trim();
+
+    final imagePath = source.imagePath.trim().isEmpty
+        ? _fallbackImagePathForObject(normalizedObjectId)
+        : source.imagePath.trim();
+
+    return _PlacedGardenObject(
+      instanceId: 'remote-$index-$normalizedObjectId',
+      objectId: normalizedObjectId,
+      displayName: displayName,
+      imagePath: imagePath,
+      rewardCoins: _stageConfigForObject(normalizedObjectId).rewardCoins,
+      position: source.position,
+    );
+  }
+
+  Offset _clampSpawnInsideBounds(Offset source) {
+    final padding = _playerCollisionRadius + 16;
+    final minX = padding;
+    final maxX = _logicalGardenWidth - padding;
+    final minY = padding;
+    final maxY = _logicalGardenHeight - padding;
+    return Offset(
+      source.dx.clamp(minX, maxX).toDouble(),
+      source.dy.clamp(minY, maxY).toDouble(),
+    );
+  }
+
+  Offset _findNearestWalkablePosition(Offset target) {
+    final clampedTarget = _clampSpawnInsideBounds(target);
+    if (!_isBlockedPosition(clampedTarget)) {
+      return clampedTarget;
+    }
+
+    const maxRadius = 420.0;
+    const stepRadius = 24.0;
+    const stepDegree = 20;
+
+    for (var radius = stepRadius; radius <= maxRadius; radius += stepRadius) {
+      for (var degree = 0; degree < 360; degree += stepDegree) {
+        final radian = degree * math.pi / 180.0;
+        final candidate = _clampSpawnInsideBounds(
+          Offset(
+            clampedTarget.dx + math.cos(radian) * radius,
+            clampedTarget.dy + math.sin(radian) * radius,
+          ),
+        );
+
+        if (!_isBlockedPosition(candidate)) {
+          return candidate;
+        }
+      }
+    }
+
+    final center = _clampSpawnInsideBounds(
+      const Offset(_logicalGardenWidth / 2, _logicalGardenHeight / 2),
+    );
+    if (!_isBlockedPosition(center)) {
+      return center;
+    }
+
+    return clampedTarget;
+  }
+
+  void _initializeVisitorPlayerPositionFromObjects() {
+    if (widget.allowObjectPlacement || widget.initialPlacedObjects.isEmpty) {
+      return;
+    }
+
+    var sumX = 0.0;
+    var sumY = 0.0;
+    var validCount = 0;
+    for (final object in widget.initialPlacedObjects) {
+      final x = object.position.dx;
+      final y = object.position.dy;
+      if (!x.isFinite || !y.isFinite) continue;
+      sumX += x;
+      sumY += y;
+      validCount += 1;
+    }
+
+    if (validCount == 0) {
+      final fallback = _findNearestWalkablePosition(
+        const Offset(_logicalGardenWidth / 2, _logicalGardenHeight / 2),
+      );
+      _playerX = fallback.dx;
+      _playerY = fallback.dy;
+      return;
+    }
+
+    final centroid = Offset(sumX / validCount, sumY / validCount);
+    final resolved = _findNearestWalkablePosition(centroid);
+    _playerX = resolved.dx;
+    _playerY = resolved.dy;
+  }
+
   @override
   void initState() {
     super.initState();
+    if (widget.initialPlacedObjects.isNotEmpty) {
+      _placedObjects = List<_PlacedGardenObject>.generate(
+        widget.initialPlacedObjects.length,
+        (index) =>
+            _toPlacedGardenObject(widget.initialPlacedObjects[index], index),
+      );
+    } else {
+      _placedObjects ??= <_PlacedGardenObject>[];
+    }
+
+    _initializeVisitorPlayerPositionFromObjects();
+    WidgetsBinding.instance.addObserver(this);
     _cameraPosition.value = Offset(_playerX, _playerY);
     _movementTicker = createTicker((elapsed) {
       if (_lastTickElapsed == Duration.zero) {
@@ -509,14 +877,40 @@ class _GardenScreenState extends State<GardenScreen>
       _lastTickElapsed = elapsed;
       _tickMovement(deltaSeconds);
     })..start();
+
+    _loadPlayerPosition();
+
+    if (widget.allowObjectPlacement) {
+      _positionSaveTimer = Timer.periodic(const Duration(milliseconds: 900), (
+        _,
+      ) {
+        _savePlayerPosition();
+      });
+    }
   }
 
   @override
   void dispose() {
+    _positionSaveTimer?.cancel();
+    if (widget.allowObjectPlacement) {
+      _savePlayerPosition();
+    }
+    WidgetsBinding.instance.removeObserver(this);
     _movementTicker.dispose();
     _cameraPosition.dispose();
     _keyboardFocusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      if (widget.allowObjectPlacement) {
+        _savePlayerPosition();
+      }
+    }
   }
 
   @override
@@ -779,9 +1173,35 @@ class _GardenScreenState extends State<GardenScreen>
     }
   }
 
+  Future<void> _loadPlayerPosition() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedX = prefs.getDouble(_playerPosXKey);
+    final savedY = prefs.getDouble(_playerPosYKey);
+    if (!mounted || savedX == null || savedY == null) return;
+
+    final next = Offset(
+      savedX.clamp(0.0, _logicalGardenWidth),
+      savedY.clamp(0.0, _logicalGardenHeight),
+    );
+
+    setState(() {
+      _playerX = next.dx;
+      _playerY = next.dy;
+      _syncCameraToPlayer();
+    });
+  }
+
+  Future<void> _savePlayerPosition() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_playerPosXKey, _playerX);
+    await prefs.setDouble(_playerPosYKey, _playerY);
+  }
+
   void _tickMovement(double deltaSeconds) {
     if (!mounted || _viewportSize == Size.zero) return;
     if (deltaSeconds <= 0) return;
+
+    _sanitizePlacedObjects();
 
     final keyboardInput = Offset(
       ((_moveRight ? 1 : 0) - (_moveLeft ? 1 : 0)).toDouble(),
@@ -805,6 +1225,64 @@ class _GardenScreenState extends State<GardenScreen>
       normalized.dy * step,
     );
     _updatePlayerAnimation(deltaSeconds, isMoving: moved || hasInput);
+    _updateObjectAutoPlayback();
+  }
+
+  _ObjectStageConfig _stageConfigForObject(String objectId) {
+    try {
+      return _stageConfigs[objectId] ?? _defaultStageConfig;
+    } catch (_) {
+      return _defaultStageConfig;
+    }
+  }
+
+  void _sanitizePlacedObjects() {
+    final objects = _placedObjectsSafe;
+    objects.removeWhere((object) {
+      try {
+        final id = object.objectId;
+        final image = object.imagePath;
+        final name = object.displayName;
+        final x = object.position.dx;
+        final y = object.position.dy;
+        if (id.isEmpty || image.isEmpty || name.isEmpty) return true;
+        if (!x.isFinite || !y.isFinite) return true;
+        return false;
+      } catch (_) {
+        return true;
+      }
+    });
+  }
+
+  void _updateObjectAutoPlayback() {
+    final now = DateTime.now();
+    final objects = _placedObjectsSafe;
+    bool changed = false;
+
+    for (final object in objects) {
+      final dx = _playerX - object.position.dx;
+      final dy = _playerY - object.position.dy;
+      final distance = math.sqrt(dx * dx + dy * dy);
+
+      final canTrigger =
+          distance <= _autoPlayNearDistance &&
+          (object.lastAutoPlayAt == null ||
+              now.difference(object.lastAutoPlayAt!) >= _autoPlayCooldown);
+
+      if (!canTrigger) continue;
+
+      object.lastAutoPlayAt = now;
+      object.playSignal += 1;
+      changed = true;
+
+      if (widget.allowObjectPlacement) {
+        _coinBalance += object.rewardCoins;
+      }
+    }
+
+    if (changed && mounted) {
+      setState(() {});
+    }
   }
 
   void _updatePlayerAnimation(double deltaSeconds, {required bool isMoving}) {
@@ -925,9 +1403,18 @@ class _GardenScreenState extends State<GardenScreen>
           spacing: 8,
           runSpacing: 8,
           children: [
-            buildChip('あなた'), // TODO: Supabaseから取得したユーザー名に変更
-            buildChip('わたしの庭'), // TODO: 庭の名前に変更
+            buildChip(
+              widget.ownerName?.trim().isNotEmpty == true
+                  ? widget.ownerName!.trim()
+                  : (widget.allowObjectPlacement ? 'あなた' : '庭の持ち主'),
+            ),
+            buildChip(
+              widget.gardenName?.trim().isNotEmpty == true
+                  ? widget.gardenName!.trim()
+                  : (widget.allowObjectPlacement ? 'わたしの庭' : '訪問中の庭'),
+            ),
             buildChip('季節: $_seasonLabel'),
+            if (widget.allowObjectPlacement) buildChip('音の実り: $_coinBalance'),
           ],
         ),
       ),
@@ -967,9 +1454,37 @@ class _GardenScreenState extends State<GardenScreen>
               buildCircleButton(
                 icon: Icons.menu_book_rounded,
                 tooltip: '図鑑を開く',
-                onPressed: () {
+                onPressed: () async {
+                  if (!widget.allowObjectPlacement) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('訪問中の庭では配置できません')),
+                    );
+                    return;
+                  }
+
                   _deactivateFloatingStick();
-                  CatalogModal.show(context);
+                  final selected = await CatalogModal.show(context);
+                  if (!mounted || selected == null) return;
+
+                  if (!selected.isUnlocked) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('未解放オブジェクトは設置できません')),
+                    );
+                    return;
+                  }
+
+                  setState(() {
+                    _pendingPlacementObject = selected;
+                    _mobilePlacementPreviewWorld = null;
+                  });
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '設置モード: ${selected.name}（オブジェクトをタップで持ち上げ/移動）',
+                      ),
+                    ),
+                  );
                 },
               ),
               const SizedBox(width: 8),
@@ -979,7 +1494,26 @@ class _GardenScreenState extends State<GardenScreen>
                 tooltip: 'オプション',
                 onPressed: () {
                   _deactivateFloatingStick();
-                  OptionsModal.show(context, isMe: true);
+                  final placements = _placedObjectsSafe
+                      .map(
+                        (object) => <String, dynamic>{
+                          'object_id': object.objectId,
+                          'display_name': object.displayName,
+                          'image_path': object.imagePath,
+                          'x': object.position.dx,
+                          'y': object.position.dy,
+                        },
+                      )
+                      .toList(growable: false);
+
+                  OptionsModal.show(
+                    context,
+                    isMe: widget.allowObjectPlacement,
+                    seasonId: widget.seasonId,
+                    gardenName: widget.gardenName,
+                    objectCount: _placedObjectsSafe.length,
+                    objectPlacements: placements,
+                  );
                 },
               ),
             ],
@@ -1008,6 +1542,17 @@ class _GardenScreenState extends State<GardenScreen>
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: () => _keyboardFocusNode.requestFocus(),
+              onTapDown: (details) {
+                _keyboardFocusNode.requestFocus();
+                if (!widget.allowObjectPlacement) return;
+                // 2状態のみ: 未選択=配置済み / 選択中=移動モード
+                // 移動モード中は「再設置」を優先する
+                if (_pendingPlacementObject != null) {
+                  _placeObjectAtScreen(details.localPosition);
+                  return;
+                }
+                _pickupPlacedObjectAtScreen(details.localPosition);
+              },
               child: Listener(
                 behavior: HitTestBehavior.translucent,
                 onPointerDown: mobileControls ? _handleMobilePointerDown : null,
@@ -1087,6 +1632,15 @@ class _GardenScreenState extends State<GardenScreen>
                                 backgroundTop,
                               ),
 
+                            ..._buildPlacedObjectWidgets(cameraX, cameraY),
+
+                            if (_mobilePlacementPreviewWorld != null)
+                              _buildPlacementPreviewWidget(
+                                cameraX,
+                                cameraY,
+                                _mobilePlacementPreviewWorld!,
+                              ),
+
                             Positioned(
                               left: playerScreenX - _playerVisualWidth / 2,
                               top: playerScreenY - _playerVisualHeight / 2,
@@ -1146,6 +1700,230 @@ class _GardenScreenState extends State<GardenScreen>
         },
       ),
     );
+  }
+
+  Widget _buildPlacementPreviewWidget(
+    double cameraX,
+    double cameraY,
+    Offset worldPosition,
+  ) {
+    final selected = _pendingPlacementObject;
+    if (selected == null) return const SizedBox.shrink();
+
+    final screenX =
+        (worldPosition.dx - cameraX) * _zoom + _viewportSize.width / 2;
+    final screenY =
+        (worldPosition.dy - cameraY) * _zoom + _viewportSize.height / 2;
+
+    return Positioned(
+      left: screenX - (_placedObjectVisualSize / 2),
+      top: screenY - (_placedObjectVisualSize / 2),
+      width: _placedObjectVisualSize,
+      height: _placedObjectVisualSize,
+      child: IgnorePointer(
+        child: Opacity(
+          opacity: 0.55,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Image.asset(selected.imagePath, fit: BoxFit.cover),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildPlacedObjectWidgets(double cameraX, double cameraY) {
+    final widgets = <Widget>[];
+
+    _sanitizePlacedObjects();
+    final objects = _placedObjectsSafe;
+    for (int i = 0; i < objects.length; i++) {
+      final object = objects[i];
+      final config = _stageConfigForObject(object.objectId);
+      final visualSize = math.max(config.stageImageSize, config.stageVideoSize);
+      final screenX =
+          (object.position.dx - cameraX) * _zoom + _viewportSize.width / 2;
+      final screenY =
+          (object.position.dy - cameraY) * _zoom + _viewportSize.height / 2;
+
+      widgets.add(
+        Positioned(
+          left: screenX - (visualSize / 2),
+          top: screenY - (visualSize / 2),
+          width: visualSize,
+          height: visualSize,
+          child: Container(
+            alignment: Alignment.center,
+            child: ObjectVideoPlayerWidget(
+              key: ValueKey(object.instanceId),
+              object: PlacedStageObject(
+                objectId: object.objectId,
+                imagePath: object.imagePath,
+                videoAssetPath: _stageConfigForObject(
+                  object.objectId,
+                ).videoAsset,
+                isMyGarden: widget.allowObjectPlacement,
+                rewardCoins: object.rewardCoins,
+                playSignal: object.playSignal,
+              ),
+              imageSize: config.stageImageSize,
+              videoSize: config.stageVideoSize,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return widgets;
+  }
+
+  bool _placeObjectAtScreen(Offset localPosition) {
+    if (!widget.allowObjectPlacement) return false;
+    final selected = _pendingPlacementObject;
+    if (selected == null || _viewportSize == Size.zero) return false;
+    if (_isInActionButtonsZone(localPosition)) return false;
+
+    final mobileControls = _isMobileControls(_viewportSize);
+    final bounds = _cameraBounds(_viewportSize);
+    final cameraX = _cameraPosition.value.dx.clamp(bounds.minX, bounds.maxX);
+    final cameraY = _cameraPosition.value.dy.clamp(bounds.minY, bounds.maxY);
+
+    final worldX =
+        ((localPosition.dx - _viewportSize.width / 2) / _zoom) + cameraX;
+    final worldY =
+        ((localPosition.dy - _viewportSize.height / 2) / _zoom) + cameraY;
+
+    final worldPosition = Offset(
+      worldX.clamp(0.0, _logicalGardenWidth),
+      worldY.clamp(0.0, _logicalGardenHeight),
+    );
+
+    if (mobileControls && _mobilePlacementPreviewWorld == null) {
+      setState(() {
+        _mobilePlacementPreviewWorld = worldPosition;
+      });
+      return true;
+    }
+
+    if (_isBlockedPlacementPosition(worldPosition)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('その場所には設置できません')));
+      setState(() {
+        _mobilePlacementPreviewWorld = null;
+      });
+      return true;
+    }
+
+    setState(() {
+      final objects = _placedObjectsSafe;
+      if (objects.length >= _maxPlacedObjects &&
+          !objects.any((o) => o.objectId == selected.id)) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('設置上限（120個）に達しています')));
+        _mobilePlacementPreviewWorld = null;
+        return;
+      }
+
+      final existingIndex = objects.indexWhere(
+        (o) => o.objectId == selected.id,
+      );
+      if (existingIndex >= 0) {
+        objects[existingIndex].position = worldPosition;
+      } else {
+        objects.add(
+          _PlacedGardenObject(
+            instanceId:
+                '${DateTime.now().microsecondsSinceEpoch}-${objects.length}',
+            objectId: selected.id,
+            displayName: selected.name,
+            imagePath: selected.imagePath,
+            rewardCoins: _stageConfigForObject(selected.id).rewardCoins,
+            position: worldPosition,
+          ),
+        );
+      }
+
+      // 設置完了で移動モード終了
+      _pendingPlacementObject = null;
+      _mobilePlacementPreviewWorld = null;
+    });
+
+    return true;
+  }
+
+  bool _isBlockedPlacementPosition(Offset worldPosition) {
+    if (_collisionMaskRgba != null &&
+        _collisionMaskWidth > 0 &&
+        _collisionMaskHeight > 0) {
+      return _isBlockedByMask(worldPosition, _placementCollisionRadius);
+    }
+
+    for (final rawArea in _blockedAreas) {
+      final area = _asBlockedShape(rawArea);
+      if (area.intersectsCircle(worldPosition, _placementCollisionRadius)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _pickupPlacedObjectAtScreen(Offset localPosition) {
+    if (!widget.allowObjectPlacement) return false;
+    if (_viewportSize == Size.zero) return false;
+
+    final index = _findPlacedObjectIndexAtScreen(localPosition);
+    if (index < 0) return false;
+
+    final picked = _placedObjectsSafe[index];
+
+    setState(() {
+      _placedObjectsSafe.removeAt(index);
+      _pendingPlacementObject = SoundObject(
+        id: picked.objectId,
+        name: picked.displayName,
+        imagePath: picked.imagePath,
+        description: '持ち上げ中のオブジェクト',
+        rewardCoins: 0,
+        isUnlocked: true,
+        effectType: 'picked-up',
+      );
+      _mobilePlacementPreviewWorld = null;
+    });
+
+    return true;
+  }
+
+  int _findPlacedObjectIndexAtScreen(Offset localPosition) {
+    if (_viewportSize == Size.zero) return -1;
+
+    final bounds = _cameraBounds(_viewportSize);
+    final cameraX = _cameraPosition.value.dx.clamp(bounds.minX, bounds.maxX);
+    final cameraY = _cameraPosition.value.dy.clamp(bounds.minY, bounds.maxY);
+
+    final objects = _placedObjectsSafe;
+    for (int i = objects.length - 1; i >= 0; i--) {
+      final object = objects[i];
+      final screenX =
+          (object.position.dx - cameraX) * _zoom + _viewportSize.width / 2;
+      final screenY =
+          (object.position.dy - cameraY) * _zoom + _viewportSize.height / 2;
+
+      final rect = Rect.fromCenter(
+        center: Offset(screenX, screenY),
+        width: _placedObjectVisualSize,
+        height: _placedObjectVisualSize,
+      );
+
+      if (rect.contains(localPosition)) return i;
+    }
+
+    return -1;
   }
 
   Widget _buildPlayerCharacter() {
@@ -1239,6 +2017,22 @@ class _GardenScreenState extends State<GardenScreen>
   }
 
   void _handleMobilePointerDown(PointerDownEvent event) {
+    if (!widget.allowObjectPlacement) {
+      if (_activeStickPointer != null) return;
+      if (_isInActionButtonsZone(event.localPosition)) return;
+      _activeStickPointer = event.pointer;
+      setState(() {
+        _floatingStickCenter = event.localPosition;
+        _stickInput = Offset.zero;
+      });
+      return;
+    }
+
+    if (_pendingPlacementObject != null) {
+      if (_placeObjectAtScreen(event.localPosition)) return;
+    } else {
+      if (_pickupPlacedObjectAtScreen(event.localPosition)) return;
+    }
     if (_activeStickPointer != null) return;
     if (_isInActionButtonsZone(event.localPosition)) return;
 
