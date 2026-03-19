@@ -24,8 +24,8 @@ class SoundObject {
 class CatalogModal extends StatefulWidget {
   const CatalogModal({super.key});
 
-  static void show(BuildContext context) {
-    showModalBottomSheet(
+  static Future<SoundObject?> show(BuildContext context) {
+    return showModalBottomSheet<SoundObject>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -545,6 +545,27 @@ class _CatalogModalState extends State<CatalogModal> {
             style: TextStyle(
               color: const Color(0xFFE0C9A5).withValues(alpha: 0.82),
               fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: isUnlocked
+                  ? () => Navigator.of(context).pop<SoundObject>(selected)
+                  : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF7F5C3D),
+                disabledBackgroundColor: const Color(0xFF4D3A2C),
+                foregroundColor: const Color(0xFFF5E8D4),
+                disabledForegroundColor: const Color(0xB0D0BEA4),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.add_circle_outline_rounded),
+              label: Text(isUnlocked ? 'このオブジェクトを庭に設置' : '未解放のため設置できません'),
             ),
           ),
         ],

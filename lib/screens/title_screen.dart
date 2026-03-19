@@ -10,7 +10,9 @@ import 'garden_screen.dart';
 import 'setup_screen.dart';
 
 class TitleScreen extends StatefulWidget {
-  const TitleScreen({super.key});
+  final bool stayOnTitle;
+
+  const TitleScreen({super.key, this.stayOnTitle = false});
 
   @override
   State<TitleScreen> createState() => _TitleScreenState();
@@ -98,7 +100,10 @@ class _TitleScreenState extends State<TitleScreen> {
               bottom: _isLoginPanelVisible ? 0 : -600,
               left: 0,
               right: 0,
-              child: AuthPanel(onClose: _hideLoginPanel),
+              child: AuthPanel(
+                onClose: _hideLoginPanel,
+                stayOnTitle: widget.stayOnTitle,
+              ),
             ),
           ],
         ),
@@ -109,8 +114,9 @@ class _TitleScreenState extends State<TitleScreen> {
 
 class AuthPanel extends StatefulWidget {
   final VoidCallback onClose;
+  final bool stayOnTitle;
 
-  const AuthPanel({super.key, required this.onClose});
+  const AuthPanel({super.key, required this.onClose, this.stayOnTitle = false});
 
   @override
   State<AuthPanel> createState() => _AuthPanelState();
@@ -205,6 +211,9 @@ class _AuthPanelState extends State<AuthPanel> {
     if (user != null) {
       await _persistSignedInLocalData(methodFallback: saved.loginMethod);
       if (!mounted) return;
+      if (widget.stayOnTitle) {
+        return;
+      }
       await _goToGardenOrSetupOnce();
     }
   }

@@ -71,9 +71,13 @@ class QrInviteScreen extends StatelessWidget {
                       child: _ActionPillButton(
                         label: 'トップへ戻る',
                         onTap: () {
-                          Navigator.of(context).pushAndRemoveUntil(
+                          Navigator.of(
+                            context,
+                            rootNavigator: true,
+                          ).pushAndRemoveUntil(
                             MaterialPageRoute(
-                              builder: (_) => const TitleScreen(),
+                              builder: (_) =>
+                                  const TitleScreen(stayOnTitle: true),
                             ),
                             (route) => false,
                           );
